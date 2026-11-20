@@ -1,0 +1,31 @@
+# Dados pessoais e materiais locais (nunca commitar)
+dados/*
+!dados/.gitkeep
+feedback-real/
+.env
+.env.*
+
+# Build Maven / Java
+target/
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# IDEs e editores
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
