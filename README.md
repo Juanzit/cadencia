@@ -2,11 +2,43 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Fase 1 em andamento — Setup Inicial (Tarefas 1.1, 1.2, 1.3 e 1.5 concluídas; 1.4 aguardando validação remota da CI).
+**Status:** Fase 1 concluída (Gate 1 aprovado) — aguardando início da Fase 2 (Núcleo de Agenda).
 
 ## Stack
 
 Java 21 · Spring Boot · Picocli · Jackson YAML · JUnit 5 · ArchUnit · JaCoCo · GitHub Actions · Ollama (Fase 6)
+
+## Como compilar e testar
+
+**Pré-requisito:** JDK Java 21 instalado.
+
+**Linux/macOS:**
+
+```bash
+./mvnw clean verify
+```
+
+**Windows:**
+
+```powershell
+.\mvnw.cmd clean verify
+```
+
+**Como iniciar o bootstrap atual:**
+
+Linux/macOS:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Windows:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+> Os comandos funcionais da CLI (`cadencia semana`, etc.) serão disponibilizados nas etapas posteriores do projeto; nesta etapa existe apenas o bootstrap Spring Boot da infraestrutura.
 
 ## Princípios
 
