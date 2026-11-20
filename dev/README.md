@@ -19,7 +19,7 @@
 
 | # | Arquivo | Entrega | Status |
 | :---: | :--- | :--- | :--- |
-| 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟡 Em Andamento (3/14 · Tarefa 1.4 em andamento) |
+| 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟡 Em Andamento (4/14 · 1.5 concluída; 1.4 aguardando CI remota) |
 | 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🔴 Não Iniciado |
 | 4 | `dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md` | Feedback e aprendizado de horários | 🔴 Não Iniciado |
 | 5 | `dev/tasks/_4_TASKS_TURMAS.md` | Previsão de turmas | 🔴 Não Iniciado |

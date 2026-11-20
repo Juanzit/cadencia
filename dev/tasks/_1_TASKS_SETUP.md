@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 3 (21%)
+* **Concluídas:** 4 (29%)
 * **Em Andamento:** 1 (7%)
-* **Pendentes:** 10 (72%)
+* **Pendentes:** 9 (64%)
 
 ---
 
@@ -28,7 +28,7 @@
 | 1.2 | Inicializar projeto Maven (Java 21, Spring Boot, Picocli, Jackson YAML, JUnit 5, AssertJ, JaCoCo) com `com.tngtech.archunit:archunit-junit5` em escopo `test` | Setup | Crítica | 🟢 Concluído |
 | 1.3 | Criar a estrutura de pacotes de `@dev/ARCHITECTURE.md` (`cli`, `agenda`, `planejamento`, `feedback`, `turmas`, `ia`, `exportacao`, `dominio`) com `package-info.java` descrevendo cada responsabilidade, e criar `ArquiteturaTest` (ArchUnit) validando: (a) `dominio` não depende de Spring, Jackson nem I/O (`java.io`, `java.nio.file`); (b) fronteiras `cli` → `service` → `repository` (CLI não acessa repositórios/adapters; services não dependem de `cli`). Na Fase 1 as regras usam `allowEmptyShould(true)` (pacotes ainda vazios); no Gate 2 o `allowEmptyShould(true)` é removido e a validação passa a ser estrita | Setup / Testes | Alta | 🟢 Concluído |
 | 1.4 | Configurar GitHub Actions executando `mvn verify` a cada push e pull request | DevOps | Alta | 🟡 Em Andamento |
-| 1.5 | Criar `exemplos/agenda.exemplo.yaml` (sintético, inspirado nas regras reais: margens EmpresaA, preparo/feedback EmpresaB, deslocamento) e pasta `dados/` vazia com `.gitkeep` versionado; no `.gitignore` usar `dados/*` e `!dados/.gitkeep` (o conteúdo é ignorado, o `.gitkeep` não) | Dados | Alta | 🔴 Não Iniciado |
+| 1.5 | Criar `exemplos/agenda.exemplo.yaml` (sintético, inspirado nas regras reais: margens EmpresaA, preparo/feedback EmpresaB, deslocamento) e pasta `dados/` vazia com `.gitkeep` versionado; no `.gitignore` usar `dados/*` e `!dados/.gitkeep` (o conteúdo é ignorado, o `.gitkeep` não) | Dados | Alta | 🟢 Concluído |
 
 ### ✅ Gate 1 — Infraestrutura
 - [ ] `mvn verify` passa em ambiente limpo

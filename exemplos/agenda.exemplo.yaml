@@ -1,0 +1,178 @@
+# Agenda semanal sintética de exemplo (Cadência)
+# Dados fictícios para desenvolvimento, testes e demonstração.
+# Sua agenda real deve ficar em dados/agenda.yaml (ignorada pelo Git).
+
+jornada:
+  inicio: "07:00"
+  fim: "23:00"
+
+# Durações em minutos inteiros (dev/RULES.md §2).
+margens:
+  deslocamento_entre_locais_min: 30
+  por_empresa:
+    EmpresaA:
+      antes_min: 30
+      depois_min: 0
+    EmpresaB:
+      antes_min: 30
+      depois_min: 15
+
+# Regras de classificação dos blocos livres (dev/tasks/_1_TASKS_SETUP.md §2.5).
+classificacao:
+  profundo_minimo_min: 90
+  interrompivel_minimo_min: 25
+
+# Compromissos fixos recorrentes na semana-padrão (aulas, reuniões, almoço, treino, deslocamentos e plantão).
+compromissos:
+  # --- Segunda-feira: aula presencial na EmpresaA + aula remota na EmpresaB ---
+  - dia: SEGUNDA
+    inicio: "09:00"
+    fim: "11:00"
+    tipo: AULA
+    empresa: EmpresaA
+    local: UNIDADE_CENTRO
+    titulo: "Turma T01"
+
+  - dia: SEGUNDA
+    inicio: "11:00"
+    fim: "11:30"
+    tipo: DESLOCAMENTO
+    local: TRANSITO
+    titulo: "Retorno para casa"
+
+  - dia: SEGUNDA
+    inicio: "12:00"
+    fim: "13:00"
+    tipo: ALMOCO
+    local: CASA
+    titulo: "Almoço"
+
+  - dia: SEGUNDA
+    inicio: "16:00"
+    fim: "17:30"
+    tipo: AULA
+    empresa: EmpresaB
+    local: CASA
+    titulo: "Turma R02"
+
+  - dia: SEGUNDA
+    inicio: "18:30"
+    fim: "19:30"
+    tipo: TREINO
+    local: ACADEMIA
+    titulo: "Treino de força"
+
+  # --- Terça-feira: janela ampla de manhã + aula EmpresaB à noite ---
+  - dia: TERCA
+    inicio: "12:30"
+    fim: "13:30"
+    tipo: ALMOCO
+    local: CASA
+    titulo: "Almoço"
+
+  - dia: TERCA
+    inicio: "19:00"
+    fim: "20:30"
+    tipo: AULA
+    empresa: EmpresaB
+    local: CASA
+    titulo: "Turma R04"
+
+  # --- Quarta-feira: reunião EmpresaA + almoço + treino + plantão/AE ---
+  - dia: QUARTA
+    inicio: "08:00"
+    fim: "09:15"
+    tipo: TREINO
+    local: ACADEMIA
+    titulo: "Treino matinal"
+
+  - dia: QUARTA
+    inicio: "11:00"
+    fim: "12:00"
+    tipo: REUNIAO
+    empresa: EmpresaA
+    local: REMOTO
+    titulo: "Reunião pedagógica semanal"
+
+  - dia: QUARTA
+    inicio: "12:30"
+    fim: "13:30"
+    tipo: ALMOCO
+    local: CASA
+    titulo: "Almoço"
+
+  - dia: QUARTA
+    inicio: "15:00"
+    fim: "17:00"
+    tipo: PLANTAO
+    empresa: EmpresaB
+    local: CASA
+    titulo: "Plantão / atendimento de apoio"
+
+  # --- Quinta-feira: aula presencial EmpresaA à tarde ---
+  - dia: QUINTA
+    inicio: "12:00"
+    fim: "13:00"
+    tipo: ALMOCO
+    local: CASA
+    titulo: "Almoço"
+
+  - dia: QUINTA
+    inicio: "14:00"
+    fim: "16:00"
+    tipo: AULA
+    empresa: EmpresaA
+    local: UNIDADE_CENTRO
+    titulo: "Turma T03"
+
+  - dia: QUINTA
+    inicio: "16:00"
+    fim: "16:30"
+    tipo: DESLOCAMENTO
+    local: TRANSITO
+    titulo: "Retorno para casa"
+
+  - dia: QUINTA
+    inicio: "19:00"
+    fim: "20:00"
+    tipo: TREINO
+    local: ACADEMIA
+    titulo: "Treino de força"
+
+  # --- Sexta-feira: dia mais leve (sem academia) ---
+  - dia: SEXTA
+    inicio: "12:00"
+    fim: "13:00"
+    tipo: ALMOCO
+    local: CASA
+    titulo: "Almoço"
+
+  - dia: SEXTA
+    inicio: "15:00"
+    fim: "16:30"
+    tipo: AULA
+    empresa: EmpresaB
+    local: CASA
+    titulo: "Turma R05"
+
+  # --- Sábado: manhã de aula presencial EmpresaA ---
+  - dia: SABADO
+    inicio: "09:00"
+    fim: "11:30"
+    tipo: AULA
+    empresa: EmpresaA
+    local: UNIDADE_CENTRO
+    titulo: "Turma T06"
+
+# Blocos manuais explícitos (ex.: janelas reservadas ou vigilância sem compromisso formal).
+blocos_manuais:
+  - dia: SEXTA
+    inicio: "10:00"
+    fim: "11:30"
+    tipo: PROFUNDO
+    descricao: "Reserva manual para estudo prático"
+  - dia: QUARTA
+    inicio: "15:00"
+    fim: "17:00"
+    tipo: VIGILANCIA
+    descricao: "Janela de plantão compatível apenas com tarefas leves"
