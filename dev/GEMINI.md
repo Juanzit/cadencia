@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Última Atualização** | Novembro de 2026 |
 | **Fase Atual** | Fase 1 — Setup Inicial e Infraestrutura (em andamento) |
-| **Status Geral** | Tarefa 1.1 concluída (`dev/tasks/_1_TASKS_SETUP.md` — 1/14); aguardando revisão para Tarefa 1.2 |
+| **Status Geral** | Tarefa 1.2 concluída (`dev/tasks/_1_TASKS_SETUP.md` — 2/14); aguardando revisão para Tarefa 1.3 |
 
 ---
 
@@ -83,3 +83,4 @@
 | :--- | :--- | :--- | :--- |
 | 2026-11-20 | Planejamento | Reorganização da documentação em `dev/` e `dev/tasks/`; ajustes pré-código nos planos | ADRs 009–012 aceitos; Q4 decidida (`cadencia` / `dev.cadencia`) |
 | 2026-11-20 | Fase 1 | Tarefa 1.1 concluída: `git init` (`main`), remote `origin`, `.gitignore` e `README.md` inicial | Menções reais substituídas por `EmpresaA`/`EmpresaB` antes do commit inicial |
+| 2026-11-20 | Fase 1 | Tarefa 1.2 concluída: projeto Maven (`dev.cadencia:cadencia:0.1.0-SNAPSHOT`, `jar`, Wrapper 3.9.11), Java 21 (`<release>21</release>`, `-Xlint:all,-processing`), Spring Boot `3.5.7`, `picocli` `4.7.7`, `jackson-dataformat-yaml` e `jackson-datatype-jsr310` (`2.19.2`), `spring-boot-starter-validation`, `spring-boot-starter-test`, `archunit-junit5` `1.4.1`, JaCoCo `0.8.13`, `CadenciaApplication`, `application.yaml`, `CadenciaApplicationTest` e `ArquiteturaTest` | `.\mvnw.cmd -B clean verify` verde (5/5 testes: 1 Spring + 4 ArchUnit; `target/site/jacoco/index.html` gerado). `ArquiteturaTest` usa `allowEmptyShould(true)` **temporariamente** na Fase 1 (remoção obrigatória no Gate 2). Surefire preserva `@{argLine}` + `-XX:+EnableDynamicAgentLoading -Xshare:off`. `ArquiteturaTest` foi antecipado da 1.3 para a 1.2; pacotes e `package-info.java` seguem na 1.3 |

@@ -1,0 +1,11 @@
+spring:
+  main:
+    banner-mode: off
+
+# Valores padrão (dev/ARCHITECTURE.md §6); sobrescritos por variáveis de ambiente.
+# A configuração do Ollama entra na Fase 6.
+cadencia:
+  diretorio-dados: ./dados
+  fuso: America/Sao_Paulo
+  pedaco-padrao-min: 25
+  folga-minima-min: 10
