@@ -5,8 +5,8 @@
 | Campo | Informação |
 | :--- | :--- |
 | **Última Atualização** | Novembro de 2026 |
-| **Fase Atual** | Fase 1 concluída (Gate 1 aprovado) — pronta para Fase 2: Núcleo de Agenda |
-| **Status Geral** | Fase 1 concluída e Gate 1 aprovado (`dev/tasks/_1_TASKS_SETUP.md` — 5/14); próxima etapa: Tarefa 2.1 |
+| **Fase Atual** | Fase 2 em andamento — Núcleo de Agenda (Tarefa 2.1 concluída) |
+| **Status Geral** | Tarefa 2.1 concluída (`dev/tasks/_1_TASKS_SETUP.md` — 6/14 · 43%); próxima etapa: Tarefa 2.2 (DTO, Repository e leitura YAML) |
 
 ---
 
@@ -88,3 +88,4 @@
 | 2026-11-20 | Fase 1 | Commit da Tarefa 1.3 (`0429efe`) publicado em `origin/dev`; criado `.github/workflows/ci.yml` (`push` e `pull_request` em `main` e `dev`, `actions/checkout@v4`, `actions/setup-java@v4` Temurin Java `21` + `cache: maven`, `./mvnw -B clean verify`) | `.\mvnw.cmd -B clean verify` verde localmente (`5/5` testes: 1 Spring + 4 ArchUnit; JaCoCo `target/site/jacoco/index.html` gerado; sem warnings). Tarefa 1.4 mantida `🟡 Em Andamento` até validação remota da CI no GitHub. Próxima etapa: revisão de `ci.yml` e execução remota |
 | 2026-11-20 | Fase 1 | Commit da Tarefa 1.4 (`f3380de`) publicado em `origin/dev`; Tarefa 1.5 concluída com criação de `exemplos/agenda.exemplo.yaml` (sintético, `EmpresaA`/`EmpresaB`) e `dados/.gitkeep`, mantendo `.gitignore` com `dados/*` e `!dados/.gitkeep` | `git check-ignore` confirmou `dados/agenda.yaml` e `dados/feedback/2026-W48.md` ignorados e `dados/.gitkeep` / `exemplos/agenda.exemplo.yaml` liberados. Sintaxe YAML validada via SnakeYAML `2.4` (`5` chaves, `18` compromissos; validação semântica fica para a Tarefa 2.2). `.\mvnw.cmd -B clean verify` verde (`5/5` testes; JaCoCo gerado). Tarefa 1.4 segue `🟡 Em Andamento` aguardando confirmação da CI no GitHub. Próxima etapa: aprovação do Gate 1 |
 | 2026-11-20 | Fase 1 | Commit da Tarefa 1.5 (`9e8467d`) publicado em `origin/dev`; Tarefa 1.4 concluída após CI verde no GitHub (`run 44834023290` em `f3380de` e `run 44835991184` em `9e8467d`); **Gate 1 aprovado** (4/4 itens) e **Fase 1 concluída**; `README.md` atualizado com instruções de compilação, teste e execução do bootstrap | `.\mvnw.cmd -B clean verify` verde localmente e CI verde em Ubuntu; `dados/.gitkeep` versionado sem dados pessoais em `dados/`. Próxima etapa: Tarefa 2.1 (núcleo de domínio) |
+| 2026-11-20 | Fase 2 | Tarefa 2.1 concluída: criados em `dev.cadencia.dominio` os tipos `TipoBloco`, `TipoCompromisso`, `Compromisso`, `Bloco` e `Semana`, com 16 testes unitários (`CompromissoTest`, `BlocoTest`, `SemanaTest`, `TiposDominioTest`) | Invariantes: `Objects.requireNonNull`, `0 < duracao < 24h`, `Bloco` com `fim > inicio`, `Semana` `1..53` e `List.copyOf`. `Compromisso` usa intervalo semiaberto `[inicio, fim)`: término exato às `00:00` retorna `cruzaMeiaNoite() == false`; `fatiarPorDia()` gera 2 fragmentos quando cruza e preserva domingo→segunda para descarte/aviso na Tarefa 2.4. `.\mvnw.cmd -B clean verify` verde (`21/21` testes, `4/4` ArchUnit com isolamento puro de domínio sem Spring/Jackson/I/O, JaCoCo `100%` linhas `48/48` e `100%` instruções `282/282` em `dominio`) |

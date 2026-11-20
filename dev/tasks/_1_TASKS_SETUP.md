@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 5 (36%)
+* **Concluídas:** 6 (43%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 9 (64%)
+* **Pendentes:** 8 (57%)
 
 ---
 
@@ -42,7 +42,7 @@
 
 | # | Tarefa | Camada / Área | Prioridade | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| 2.1 | Implementar `dominio`: `Compromisso`, `Bloco`, `TipoBloco`, `Semana` como *records* imutáveis. `Compromisso` é modelado como `inicio` + `Duration` (duração > 0 e < 24h), e `fim` é derivado; assim compromissos que cruzam a meia-noite (ex.: 23:00–01:00) são válidos. Ao gerar a semana, um compromisso que cruza a meia-noite é **fatiado** em dois intervalos (até 24:00 do dia e de 00:00 no dia seguinte; no domingo, a fração da segunda-feira seguinte é descartada na semana atual e registrada como aviso) | Domain | Crítica | 🔴 Não Iniciado |
+| 2.1 | Implementar `dominio`: `Compromisso`, `Bloco`, `TipoBloco`, `Semana` como *records* imutáveis. `Compromisso` é modelado como `inicio` + `Duration` (duração > 0 e < 24h), e `fim` é derivado; assim compromissos que cruzam a meia-noite (ex.: 23:00–01:00) são válidos. Ao gerar a semana, um compromisso que cruza a meia-noite é **fatiado** em dois intervalos (até 24:00 do dia e de 00:00 no dia seguinte; no domingo, a fração da segunda-feira seguinte é descartada na semana atual e registrada como aviso) | Domain | Crítica | 🟢 Concluído |
 | 2.2 | Implementar `AgendaDto` (Bean Validation), `AgendaRepository` e `YamlAgendaRepository`, com tratamento **separado** de erros (padrão `@dev/DESIGN.md`): (a) **erro de sintaxe YAML** → linha e coluna obtidas da `JsonLocation` da exceção do Jackson; (b) **erro de validação de campo** (Bean Validation) → caminho do campo no formato `compromissos[i].campo` (a partir do `propertyPath` da violação), sem número de linha | Repository / DTO | Crítica | 🔴 Não Iniciado |
 | 2.3 | Implementar em `AgendaService` a aplicação das margens configuráveis: 30 min antes da aula EmpresaA; 30 min antes e 15 min depois da aula EmpresaB; deslocamento de 30 min entre locais | Service | Crítica | 🔴 Não Iniciado |
 | 2.4 | Implementar o cálculo dos intervalos livres da semana (subtração de compromissos e margens, mesclando sobreposições) com `Clock` injetado | Service | Crítica | 🔴 Não Iniciado |
