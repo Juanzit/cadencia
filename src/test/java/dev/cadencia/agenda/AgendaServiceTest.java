@@ -1093,6 +1093,16 @@ class AgendaServiceTest {
             assertThat(primeiraExecucao).isEqualTo(segundaExecucao);
             assertThat(primeiraExecucao.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 23));
             assertThat(primeiraExecucao.avisos()).isEmpty();
+            List<IntervaloOcupado> ocupadosExpandidos =
+                    service.expandir(Path.of("exemplos/agenda.exemplo.yaml")).intervalosOcupados();
+            List<IntervaloOcupado> ocupadosEsperadosSemPlantao = ocupadosExpandidos.stream()
+                    .filter(intervalo -> !(intervalo.data().equals(LocalDate.of(2026, 11, 25))
+                            && intervalo.inicio().equals(LocalTime.of(15, 0))
+                            && intervalo.tipo() == TipoIntervaloOcupado.COMPROMISSO))
+                    .toList();
+            assertThat(ocupadosEsperadosSemPlantao).hasSize(ocupadosExpandidos.size() - 1);
+            assertThat(primeiraExecucao.intervalosOcupados())
+                    .containsExactlyElementsOf(ocupadosEsperadosSemPlantao);
 
             Semana semana = primeiraExecucao.semana();
             assertThat(semana.ano()).isEqualTo(2026);
@@ -1157,6 +1167,8 @@ class AgendaServiceTest {
 
             assertThatThrownBy(() -> primeiraExecucao.avisos().add("novo"))
                     .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> primeiraExecucao.intervalosOcupados().clear())
+                    .isInstanceOf(UnsupportedOperationException.class);
             assertThatThrownBy(() -> semana.blocos().clear())
                     .isInstanceOf(UnsupportedOperationException.class);
             assertThatThrownBy(() -> semana.compromissos().clear())
@@ -1165,16 +1177,80 @@ class AgendaServiceTest {
             // Invariantes de SemanaPlanejada
             LocalDate segunda = LocalDate.of(2026, 11, 23);
             assertThatNullPointerException()
-                    .isThrownBy(() -> new SemanaPlanejada(null, semana, List.of()));
+                    .isThrownBy(() -> new SemanaPlanejada(null, semana, List.of(), List.of()));
             assertThatNullPointerException()
-                    .isThrownBy(() -> new SemanaPlanejada(segunda, null, List.of()));
+                    .isThrownBy(() -> new SemanaPlanejada(segunda, null, List.of(), List.of()));
             assertThatNullPointerException()
-                    .isThrownBy(() -> new SemanaPlanejada(segunda, semana, null));
+                    .isThrownBy(() -> new SemanaPlanejada(segunda, semana, null, List.of()));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new SemanaPlanejada(segunda, semana, List.of(), null));
+            List<IntervaloOcupado> ocupadosMutaveis = new ArrayList<>(List.of(new IntervaloOcupado(
+                    segunda, LocalTime.of(9, 0), Duration.ofMinutes(30), TipoIntervaloOcupado.COMPROMISSO, "x")));
             List<String> avisosMutaveis = new ArrayList<>(List.of("a"));
-            SemanaPlanejada copiaDefensiva = new SemanaPlanejada(segunda, semana, avisosMutaveis);
+            SemanaPlanejada copiaDefensiva = new SemanaPlanejada(segunda, semana, ocupadosMutaveis, avisosMutaveis);
+            ocupadosMutaveis.clear();
             avisosMutaveis.clear();
+            assertThat(copiaDefensiva.intervalosOcupados()).hasSize(1);
             assertThat(copiaDefensiva.avisos()).containsExactly("a");
+            SemanaPlanejada construtorConveniencia = new SemanaPlanejada(segunda, semana, List.of("aviso"));
+            assertThat(construtorConveniencia.intervalosOcupados()).isEmpty();
+            assertThat(construtorConveniencia.avisos()).containsExactly("aviso");
         }
+    }
+
+    @Test
+    void deveExcluirFragmentosDePlantaoDosIntervalosOcupadosPeloEnumInclusiveMeiaNoite() {
+        List<Compromisso> compromissos = List.of(
+                // PLANTAO atravessando a meia-noite (segunda 22:00–00:00 e terça 00:00–02:00): ambos os fragmentos excluídos
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(22, 0), Duration.ofHours(4),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão noturno"),
+                // REUNIAO com texto "PLANTAO" no título NÃO é plantão: deve permanecer em intervalosOcupados
+                new Compromisso(DayOfWeek.WEDNESDAY, LocalTime.of(14, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "PLANTAO"),
+                // PLANTAO sobreposto por REUNIAO na quinta: PLANTAO excluído, REUNIAO preservada
+                new Compromisso(DayOfWeek.THURSDAY, LocalTime.of(14, 0), Duration.ofHours(3),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão quinta"),
+                new Compromisso(DayOfWeek.THURSDAY, LocalTime.of(15, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "Reunião urgente"));
+
+        AgendaService service = criarService(
+                new Jornada(LocalTime.of(0, 0), LocalTime.of(23, 30)),
+                new Margens(0, Map.of()),
+                compromissos,
+                RELOGIO_SEGUNDA_W48);
+        Path caminho = Path.of("in-memory/plantao-meia-noite.yaml");
+
+        AgendaExpandida expandida = service.expandir(caminho);
+        assertThat(expandida.intervalosOcupados()).hasSize(5);
+
+        SemanaPlanejada planejada = service.gerarSemana(caminho);
+        assertThat(planejada.intervalosOcupados())
+                .extracting(IntervaloOcupado::data, IntervaloOcupado::inicio, IntervaloOcupado::fim,
+                        IntervaloOcupado::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 25), LocalTime.of(14, 0), LocalTime.of(15, 0),
+                                "REUNIAO · PLANTAO"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 26), LocalTime.of(15, 0), LocalTime.of(16, 0),
+                                "REUNIAO · Reunião urgente"));
+
+        assertThat(planejada.semana().blocos())
+                .filteredOn(b -> b.tipo() == TipoBloco.VIGILANCIA)
+                .extracting(Bloco::data, Bloco::inicio, Bloco::fim, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(22, 0), LocalTime.of(23, 30),
+                                "PLANTAO · Plantão noturno"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 24), LocalTime.MIDNIGHT, LocalTime.of(2, 0),
+                                "PLANTAO · Plantão noturno"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 26), LocalTime.of(14, 0), LocalTime.of(15, 0),
+                                "PLANTAO · Plantão quinta"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 26), LocalTime.of(16, 0), LocalTime.of(17, 0),
+                                "PLANTAO · Plantão quinta"));
     }
 
     private static AgendaService criarService(

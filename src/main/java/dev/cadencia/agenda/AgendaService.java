@@ -69,6 +69,10 @@ public class AgendaService {
             .thenComparing(IntervaloOcupado::duracao)
             .thenComparing(IntervaloOcupado::descricao);
 
+    private static final Comparator<IntervaloExpandido> ORDEM_INTERVALOS_EXPANDIDOS = Comparator
+            .comparing(IntervaloExpandido::intervalo, ORDEM_INTERVALOS)
+            .thenComparing(IntervaloExpandido::plantao);
+
     private static final Comparator<FaixaNanos> ORDEM_FAIXAS = Comparator
             .comparingLong(FaixaNanos::inicio)
             .thenComparingLong(FaixaNanos::fim);
@@ -86,23 +90,7 @@ public class AgendaService {
      * para a semana ISO corrente (segunda a domingo) no fuso {@code America/Sao_Paulo}.
      */
     public AgendaExpandida expandir(Path caminhoAgenda) {
-        Objects.requireNonNull(caminhoAgenda, "caminhoAgenda não pode ser nulo");
-        AgendaConfiguracao configuracao = agendaRepository.carregar(caminhoAgenda);
-
-        LocalDate hoje = LocalDate.ofInstant(clock.instant(), FUSO_PADRAO);
-        LocalDate inicioSemana = hoje.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        LocalDate fimSemana = inicioSemana.plusDays(6);
-
-        List<Compromisso> compromissosOrdenados = ordenarCompromissos(configuracao.compromissos());
-
-        List<IntervaloOcupado> intervalos = new ArrayList<>();
-        List<String> avisos = new ArrayList<>();
-
-        Map<DayOfWeek, List<Compromisso>> compromissosPorDia = agruparPorDiaOrdenado(compromissosOrdenados);
-        expandirPorDia(compromissosPorDia, configuracao, inicioSemana, fimSemana, intervalos, avisos);
-
-        intervalos.sort(ORDEM_INTERVALOS);
-        return new AgendaExpandida(inicioSemana, configuracao, intervalos, avisos);
+        return expandirInterno(caminhoAgenda).agendaExpandida();
     }
 
     /**
@@ -116,9 +104,13 @@ public class AgendaService {
     /**
      * Classifica os intervalos livres, aplica blocos manuais com precedência sobre {@code PLANTAO}
      * e monta a {@link Semana} ISO completa preservando avisos da expansão e conflitos manuais.
+     *
+     * <p>Os fragmentos originados de {@link TipoCompromisso#PLANTAO} são convertidos em blocos de
+     * vigilância e excluídos de {@link SemanaPlanejada#intervalosOcupados()}.
      */
     public SemanaPlanejada gerarSemana(Path caminhoAgenda) {
-        AgendaExpandida expandida = expandir(caminhoAgenda);
+        ExpansaoInterna expansao = expandirInterno(caminhoAgenda);
+        AgendaExpandida expandida = expansao.agendaExpandida();
         AgendaConfiguracao configuracao = expandida.configuracao();
         validarBlocosManuaisSemSobreposicao(configuracao.blocosManuais());
 
@@ -160,7 +152,37 @@ public class AgendaService {
                 inicioSemana.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR),
                 compromissosOrdenados,
                 blocos);
-        return new SemanaPlanejada(inicioSemana, semana, avisos);
+        return new SemanaPlanejada(inicioSemana, semana, expansao.intervalosOcupadosSemPlantao(), avisos);
+    }
+
+    private ExpansaoInterna expandirInterno(Path caminhoAgenda) {
+        Objects.requireNonNull(caminhoAgenda, "caminhoAgenda não pode ser nulo");
+        AgendaConfiguracao configuracao = agendaRepository.carregar(caminhoAgenda);
+
+        LocalDate hoje = LocalDate.ofInstant(clock.instant(), FUSO_PADRAO);
+        LocalDate inicioSemana = hoje.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate fimSemana = inicioSemana.plusDays(6);
+
+        List<Compromisso> compromissosOrdenados = ordenarCompromissos(configuracao.compromissos());
+
+        List<IntervaloExpandido> intervalosExpandidos = new ArrayList<>();
+        List<String> avisos = new ArrayList<>();
+
+        Map<DayOfWeek, List<Compromisso>> compromissosPorDia = agruparPorDiaOrdenado(compromissosOrdenados);
+        expandirPorDia(compromissosPorDia, configuracao, inicioSemana, fimSemana, intervalosExpandidos, avisos);
+
+        intervalosExpandidos.sort(ORDEM_INTERVALOS_EXPANDIDOS);
+        List<IntervaloOcupado> intervalos = intervalosExpandidos.stream()
+                .map(IntervaloExpandido::intervalo)
+                .toList();
+        List<IntervaloOcupado> intervalosSemPlantao = intervalosExpandidos.stream()
+                .filter(item -> !item.plantao())
+                .map(IntervaloExpandido::intervalo)
+                .toList();
+
+        return new ExpansaoInterna(
+                new AgendaExpandida(inicioSemana, configuracao, intervalos, avisos),
+                intervalosSemPlantao);
     }
 
     private AgendaIntervalosLivres calcularIntervalosLivres(AgendaExpandida expandida) {
@@ -548,6 +570,14 @@ public class AgendaService {
     private record CompromissoFragmento(FaixaNanos faixa, String descricao) {
     }
 
+    private record IntervaloExpandido(IntervaloOcupado intervalo, boolean plantao) {
+    }
+
+    private record ExpansaoInterna(
+            AgendaExpandida agendaExpandida,
+            List<IntervaloOcupado> intervalosOcupadosSemPlantao) {
+    }
+
     private static Map<DayOfWeek, List<Compromisso>> agruparPorDiaOrdenado(
             List<Compromisso> compromissosOrdenados) {
         Map<DayOfWeek, List<Compromisso>> porDia = new EnumMap<>(DayOfWeek.class);
@@ -562,7 +592,7 @@ public class AgendaService {
             AgendaConfiguracao configuracao,
             LocalDate inicioSemana,
             LocalDate fimSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
         Map<String, MargemEmpresa> margensPorEmpresa = configuracao.margens().porEmpresa();
@@ -593,9 +623,10 @@ public class AgendaService {
             Compromisso compromisso,
             LocalDate inicioSemana,
             LocalDate fimSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
+        boolean plantao = compromisso.tipo() == TipoCompromisso.PLANTAO;
         String descricao = descreverCompromisso(compromisso);
         List<Compromisso> fragmentos = compromisso.fatiarPorDia();
         LocalDate dataInicial = dataNaSemana(inicioSemana, compromisso.diaSemana());
@@ -611,12 +642,14 @@ public class AgendaService {
                         fragmento.fim()));
                 continue;
             }
-            intervalos.add(new IntervaloOcupado(
-                    dataFragmento,
-                    fragmento.inicio(),
-                    fragmento.duracao(),
-                    TipoIntervaloOcupado.COMPROMISSO,
-                    descricao));
+            intervalos.add(new IntervaloExpandido(
+                    new IntervaloOcupado(
+                            dataFragmento,
+                            fragmento.inicio(),
+                            fragmento.duracao(),
+                            TipoIntervaloOcupado.COMPROMISSO,
+                            descricao),
+                    plantao));
         }
     }
 
@@ -625,7 +658,7 @@ public class AgendaService {
             Map<String, MargemEmpresa> margensPorEmpresa,
             LocalDate inicioSemana,
             LocalDate fimSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
         if (aula.empresa() == null || aula.empresa().isBlank()) {
@@ -667,7 +700,7 @@ public class AgendaService {
             List<Compromisso> compromissosOrdenados,
             Duration duracaoDeslocamento,
             LocalDate inicioSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
         String localAnteriorNormalizado = null;
@@ -710,7 +743,7 @@ public class AgendaService {
             TipoIntervaloOcupado tipo,
             String descricao,
             LocalDate inicioSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
         long restanteNanos = duracaoTotal.toNanos();
@@ -731,7 +764,9 @@ public class AgendaService {
             }
             long usadoNanos = Math.min(restanteNanos, fimNoDiaNanos);
             LocalTime inicio = LocalTime.ofNanoOfDay(fimNoDiaNanos - usadoNanos);
-            intervalos.add(new IntervaloOcupado(dia, inicio, Duration.ofNanos(usadoNanos), tipo, descricao));
+            intervalos.add(new IntervaloExpandido(
+                    new IntervaloOcupado(dia, inicio, Duration.ofNanos(usadoNanos), tipo, descricao),
+                    false));
             restanteNanos -= usadoNanos;
             dia = dia.minusDays(1);
             fimNoDiaNanos = NANOS_POR_DIA;
@@ -745,7 +780,7 @@ public class AgendaService {
             TipoIntervaloOcupado tipo,
             String descricao,
             LocalDate fimSemana,
-            List<IntervaloOcupado> intervalos,
+            List<IntervaloExpandido> intervalos,
             List<String> avisos) {
 
         long restanteNanos = duracaoTotal.toNanos();
@@ -761,12 +796,14 @@ public class AgendaService {
             }
             long disponivelNoDiaNanos = NANOS_POR_DIA - inicioNoDiaNanos;
             long usadoNanos = Math.min(restanteNanos, disponivelNoDiaNanos);
-            intervalos.add(new IntervaloOcupado(
-                    dia,
-                    LocalTime.ofNanoOfDay(inicioNoDiaNanos),
-                    Duration.ofNanos(usadoNanos),
-                    tipo,
-                    descricao));
+            intervalos.add(new IntervaloExpandido(
+                    new IntervaloOcupado(
+                            dia,
+                            LocalTime.ofNanoOfDay(inicioNoDiaNanos),
+                            Duration.ofNanos(usadoNanos),
+                            tipo,
+                            descricao),
+                    false));
             restanteNanos -= usadoNanos;
             dia = dia.plusDays(1);
             inicioNoDiaNanos = 0;

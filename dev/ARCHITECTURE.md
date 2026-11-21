@@ -29,7 +29,7 @@ cadencia/
     │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
     │   │   ├── IntervaloLivre.java       # janela livre diária [inicio, fim) com duracao() positiva
     │   │   ├── IntervaloOcupado.java     # fragmento diário ocupado [inicio, fim)
-    │   │   ├── SemanaPlanejada.java      # saída semanal imutável contendo inicioSemana, Semana ISO e avisos
+    │   │   ├── SemanaPlanejada.java      # saída semanal imutável contendo inicioSemana, Semana ISO, intervalosOcupados e avisos
     │   │   ├── TipoIntervaloOcupado.java # COMPROMISSO, MARGEM_ANTES, MARGEM_DEPOIS, DESLOCAMENTO_AUTOMATICO
     │   │   └── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
     │   ├── planejamento/         # módulo de alocação de estudos
@@ -55,8 +55,8 @@ cadencia/
     │   │   └── RoteiroService.java
     │   ├── exportacao/           # saída Markdown
     │   │   └── strategies/
-    │   │       ├── ExportadorStrategy.java
-    │   │       └── MarkdownSemanalExportador.java
+    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação
+    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal (3.1)
     │   └── dominio/              # DOMAIN: records e regras puras (sem Spring)
     │       ├── AgendaConfiguracao.java
     │       ├── Bloco.java
@@ -79,7 +79,7 @@ cadencia/
 ## 2. Fluxo de Dados
 
 ```text
-agenda.yaml ──> AgendaRepository ──> AgendaService ──> SemanaPlanejada (Semana + blocos classificados + avisos) ─┐
+agenda.yaml ──> AgendaRepository ──> AgendaService ──> SemanaPlanejada (Semana + ocupações + avisos) ─┐
 backlog.yaml ─> BacklogRepository ─> PlanejamentoService (AlocadorStrategy) <───────┤
 feedback/*.md ─> FeedbackRepository ─> ConfiabilidadeService ───────────────────────┤
 turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ──────────────────────────┤

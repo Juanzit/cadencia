@@ -2,7 +2,7 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Fase 2 concluída e Gate 2 aprovado — Núcleo de Agenda completo (carregamento YAML validado, expansão semanal, intervalos livres, classificação de blocos, casos de borda end-to-end e checagens estritas de cobertura e ArchUnit); próxima etapa: Fase 2B (`MarkdownSemanalExportador` e CLI `cadencia semana`).
+**Status:** Fase 2B em andamento (`12/14 · 86%`) — Tarefa 3.1 concluída (`ExportadorStrategy`, `MarkdownSemanalExportador` no formato do `@dev/DESIGN.md` e `SemanaPlanejada.intervalosOcupados` disponíveis); próxima etapa: Tarefa 3.2 (CLI `cadencia semana`).
 
 ## Stack
 
