@@ -244,6 +244,67 @@ class YamlAgendaRepositoryTest {
     }
 
     @Test
+    void deveRejeitarBlocosManuaisSobrepostosNoMesmoDiaEPermitirAdjacentes() throws IOException {
+        Path sobreposto = tempDir.resolve("blocos-sobrepostos.yaml");
+        Files.writeString(sobreposto, """
+                jornada:
+                  inicio: "07:00"
+                  fim: "23:00"
+                margens:
+                  deslocamento_entre_locais_min: 30
+                  por_empresa: {}
+                classificacao:
+                  profundo_minimo_min: 90
+                  interrompivel_minimo_min: 25
+                compromissos: []
+                blocos_manuais:
+                  - dia: SEGUNDA
+                    inicio: "10:00"
+                    fim: "12:00"
+                    tipo: PROFUNDO
+                    descricao: "Primeiro"
+                  - dia: SEGUNDA
+                    inicio: "11:00"
+                    fim: "13:00"
+                    tipo: INTERROMPIVEL
+                    descricao: "Sobreposto"
+                """);
+
+        assertThatThrownBy(() -> repository.carregar(sobreposto))
+                .isInstanceOf(DadosInvalidosException.class)
+                .satisfies(ex -> assertThat(ex.getMessage())
+                        .contains("blocosManuais[1].inicio")
+                        .contains("sobrepõe outro bloco manual")
+                        .doesNotContain("linha"));
+
+        Path adjacente = tempDir.resolve("blocos-adjacentes.yaml");
+        Files.writeString(adjacente, """
+                jornada:
+                  inicio: "07:00"
+                  fim: "23:00"
+                margens:
+                  deslocamento_entre_locais_min: 30
+                  por_empresa: {}
+                classificacao:
+                  profundo_minimo_min: 90
+                  interrompivel_minimo_min: 25
+                compromissos: []
+                blocos_manuais:
+                  - dia: SEGUNDA
+                    inicio: "10:00"
+                    fim: "11:00"
+                    tipo: PROFUNDO
+                  - dia: SEGUNDA
+                    inicio: "11:00"
+                    fim: "12:00"
+                    tipo: INTERROMPIVEL
+                """);
+
+        AgendaConfiguracao configAdjacente = repository.carregar(adjacente);
+        assertThat(configAdjacente.blocosManuais()).hasSize(2);
+    }
+
+    @Test
     void deveInformarCaminhoEOrientacaoQuandoArquivoNaoExistir() {
         Path inexistente = tempDir.resolve("nao-existe.yaml");
 

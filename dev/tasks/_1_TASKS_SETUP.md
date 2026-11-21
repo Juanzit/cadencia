@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 9 (64%)
+* **Concluídas:** 10 (71%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 5 (36%)
+* **Pendentes:** 4 (29%)
 
 ---
 
@@ -46,7 +46,7 @@
 | 2.2 | Implementar `AgendaDto` (Bean Validation), `AgendaRepository` e `YamlAgendaRepository`, com tratamento **separado** de erros (padrão `@dev/DESIGN.md`): (a) **erro de sintaxe YAML** → linha e coluna obtidas da `JsonLocation` da exceção do Jackson; (b) **erro de validação de campo** (Bean Validation) → caminho do campo no formato `compromissos[i].campo` (a partir do `propertyPath` da violação), sem número de linha | Repository / DTO | Crítica | 🟢 Concluído |
 | 2.3 | Implementar em `AgendaService` a aplicação das margens configuráveis: 30 min antes da aula EmpresaA; 30 min antes e 15 min depois da aula EmpresaB; deslocamento de 30 min entre locais | Service | Crítica | 🟢 Concluído |
 | 2.4 | Implementar o cálculo dos intervalos livres da semana (subtração de compromissos e margens, mesclando sobreposições) com `Clock` injetado | Service | Crítica | 🟢 Concluído |
-| 2.5 | Implementar a classificação dos blocos livres em `PROFUNDO`, `INTERROMPIVEL` e `VIGILANCIA` (por regra configurável em `agenda.yaml`, incluindo `blocos_manuais`; AE vazia e plantão entram como `VIGILANCIA`) | Service | Alta | 🔴 Não Iniciado |
+| 2.5 | Implementar a classificação dos blocos livres em `PROFUNDO`, `INTERROMPIVEL` e `VIGILANCIA` (por regra configurável em `agenda.yaml`, incluindo `blocos_manuais`; AE vazia e plantão entram como `VIGILANCIA`) | Service | Alta | 🟢 Concluído |
 | 2.6 | Escrever testes dos casos de borda: margens sobrepostas, compromisso colado em outro, dia totalmente ocupado, dia vazio, compromisso após as 22h, compromisso que cruza a meia-noite (fatiado em dois intervalos, ocupando o fim de um dia e o início do seguinte), semana com dia sem academia | Testes | Crítica | 🔴 Não Iniciado |
 
 ### ✅ Gate 2 — Núcleo de Agenda

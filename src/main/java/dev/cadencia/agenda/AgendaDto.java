@@ -27,6 +27,9 @@ import java.lang.annotation.Target;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,7 @@ import java.util.Map;
 /**
  * DTO de entrada para desserialização e validação via Bean Validation do arquivo {@code agenda.yaml}.
  */
+@AgendaDto.BlocosManuaisSemSobreposicao
 public record AgendaDto(
         @NotNull(message = "seção 'jornada' é obrigatória")
         @Valid
@@ -309,6 +313,90 @@ public record AgendaDto(
                 contexto.buildConstraintViolationWithTemplate(contexto.getDefaultConstraintMessageTemplate())
                         .addPropertyNode("fim")
                         .addConstraintViolation();
+            }
+            return valido;
+        }
+    }
+
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Constraint(validatedBy = BlocosManuaisSemSobreposicaoValidator.class)
+    @interface BlocosManuaisSemSobreposicao {
+        String message() default "blocos manuais não podem se sobrepor no mesmo dia";
+
+        Class<?>[] groups() default {};
+
+        Class<? extends Payload>[] payload() default {};
+    }
+
+    /**
+     * Garante que não existam blocos manuais com horários sobrepostos no mesmo dia da semana.
+     */
+    public static class BlocosManuaisSemSobreposicaoValidator
+            implements ConstraintValidator<BlocosManuaisSemSobreposicao, AgendaDto> {
+
+        private record EntradaBloco(int indice, LocalTime inicio, LocalTime fim) {
+        }
+
+        @Override
+        public boolean isValid(AgendaDto agenda, ConstraintValidatorContext contexto) {
+            if (agenda == null || agenda.blocosManuais() == null || agenda.blocosManuais().size() < 2) {
+                return true;
+            }
+
+            Map<DayOfWeek, List<EntradaBloco>> porDia = new EnumMap<>(DayOfWeek.class);
+            for (int i = 0; i < agenda.blocosManuais().size(); i++) {
+                BlocoManualDto dto = agenda.blocosManuais().get(i);
+                if (dto == null
+                        || dto.dia() == null
+                        || dto.inicio() == null
+                        || dto.fim() == null
+                        || !dto.dia().matches(REGEX_DIA)
+                        || !dto.inicio().matches(REGEX_HORARIO)
+                        || !dto.fim().matches(REGEX_HORARIO)) {
+                    continue;
+                }
+                LocalTime inicio = LocalTime.parse(dto.inicio());
+                LocalTime fim = LocalTime.parse(dto.fim());
+                if (!fim.isAfter(inicio)) {
+                    continue;
+                }
+                DayOfWeek diaSemana = DIAS_SEMANA.get(dto.dia());
+                porDia.computeIfAbsent(diaSemana, ignored -> new ArrayList<>())
+                        .add(new EntradaBloco(i, inicio, fim));
+            }
+
+            boolean valido = true;
+            for (List<EntradaBloco> entradas : porDia.values()) {
+                entradas.sort(Comparator.comparing(EntradaBloco::inicio)
+                        .thenComparing(EntradaBloco::fim)
+                        .thenComparingInt(EntradaBloco::indice));
+                EntradaBloco blocoFimMaximo = entradas.get(0);
+                for (int i = 1; i < entradas.size(); i++) {
+                    EntradaBloco atual = entradas.get(i);
+                    if (atual.inicio().isBefore(blocoFimMaximo.fim())) {
+                        if (valido) {
+                            contexto.disableDefaultConstraintViolation();
+                            valido = false;
+                        }
+                        int indiceViolacao = Math.max(blocoFimMaximo.indice(), atual.indice());
+                        String mensagem = String.format(
+                                "bloco manual (%s–%s) sobrepõe outro bloco manual no mesmo dia (%s–%s)",
+                                atual.inicio(),
+                                atual.fim(),
+                                blocoFimMaximo.inicio(),
+                                blocoFimMaximo.fim());
+                        contexto.buildConstraintViolationWithTemplate(mensagem)
+                                .addPropertyNode("blocosManuais")
+                                .addPropertyNode("inicio")
+                                .inIterable()
+                                .atIndex(indiceViolacao)
+                                .addConstraintViolation();
+                    }
+                    if (atual.fim().isAfter(blocoFimMaximo.fim())) {
+                        blocoFimMaximo = atual;
+                    }
+                }
             }
             return valido;
         }

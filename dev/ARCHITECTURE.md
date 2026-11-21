@@ -21,14 +21,15 @@ cadencia/
     ├── main/java/dev/cadencia/
     │   ├── cli/                  # CONTROLLER: comandos Picocli
     │   ├── agenda/               # módulo de agenda e blocos livres
-    │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML
+    │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML (incluindo blocos manuais sem sobreposição)
     │   │   ├── AgendaExpandida.java      # saída semanal imutável (ocupações, configuração e avisos)
     │   │   ├── AgendaIntervalosLivres.java # saída semanal imutável de janelas livres da jornada
     │   │   ├── AgendaRepository.java     # porta (retorna AgendaConfiguracao)
-    │   │   ├── AgendaService.java        # expansão semanal, margens, deslocamentos (2.3) e intervalos livres (2.4; classificação na 2.5)
+    │   │   ├── AgendaService.java        # expansão semanal, intervalos livres e classificação de blocos da Semana (2.3–2.5)
     │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
     │   │   ├── IntervaloLivre.java       # janela livre diária [inicio, fim) com duracao() positiva
     │   │   ├── IntervaloOcupado.java     # fragmento diário ocupado [inicio, fim)
+    │   │   ├── SemanaPlanejada.java      # saída semanal imutável contendo inicioSemana, Semana ISO e avisos
     │   │   ├── TipoIntervaloOcupado.java # COMPROMISSO, MARGEM_ANTES, MARGEM_DEPOIS, DESLOCAMENTO_AUTOMATICO
     │   │   └── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
     │   ├── planejamento/         # módulo de alocação de estudos
@@ -78,7 +79,7 @@ cadencia/
 ## 2. Fluxo de Dados
 
 ```text
-agenda.yaml ──> AgendaRepository ──> AgendaService ──> AgendaExpandida / AgendaIntervalosLivres ──> [2.5] classificação de blocos ─┐
+agenda.yaml ──> AgendaRepository ──> AgendaService ──> SemanaPlanejada (Semana + blocos classificados + avisos) ─┐
 backlog.yaml ─> BacklogRepository ─> PlanejamentoService (AlocadorStrategy) <───────┤
 feedback/*.md ─> FeedbackRepository ─> ConfiabilidadeService ───────────────────────┤
 turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ──────────────────────────┤

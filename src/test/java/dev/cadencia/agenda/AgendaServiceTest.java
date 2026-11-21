@@ -7,11 +7,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import dev.cadencia.dominio.AgendaConfiguracao;
+import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.BlocoManual;
 import dev.cadencia.dominio.Classificacao;
 import dev.cadencia.dominio.Compromisso;
 import dev.cadencia.dominio.Jornada;
 import dev.cadencia.dominio.MargemEmpresa;
 import dev.cadencia.dominio.Margens;
+import dev.cadencia.dominio.Semana;
+import dev.cadencia.dominio.TipoBloco;
 import dev.cadencia.dominio.TipoCompromisso;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
@@ -27,6 +31,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class AgendaServiceTest {
@@ -762,15 +767,435 @@ class AgendaServiceTest {
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
+    @Test
+    void deveClassificarBlocosNosLimitesExatosUsandoConfiguracaoClassificacaoEDescartarMenores() {
+        // Segunda com janelas exatas:
+        // 07:00–07:24 (24 min -> descartado) | 07:24–08:00 ocupado
+        // 08:00–08:25 (25 min -> INTERROMPIVEL) | 08:25–09:00 ocupado
+        // 09:00–10:29 (89 min -> INTERROMPIVEL) | 10:29–11:00 ocupado
+        // 11:00–12:30 (90 min -> PROFUNDO) | 12:30–23:00 ocupado
+        List<Compromisso> compromissos = List.of(
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(7, 24), Duration.ofMinutes(36),
+                        TipoCompromisso.REUNIAO, null, null, "Bloqueio 1"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(8, 25), Duration.ofMinutes(35),
+                        TipoCompromisso.REUNIAO, null, null, "Bloqueio 2"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(10, 29), Duration.ofMinutes(31),
+                        TipoCompromisso.REUNIAO, null, null, "Bloqueio 3"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(12, 30), Duration.ofMinutes(630),
+                        TipoCompromisso.REUNIAO, null, null, "Bloqueio 4"));
+
+        AgendaService padrao = criarService(
+                JORNADA_PADRAO, new Margens(0, Map.of()), CLASSIFICACAO_PADRAO, compromissos, List.of(), RELOGIO_SEGUNDA_W48);
+        SemanaPlanejada resultadoPadrao = padrao.gerarSemana(CAMINHO_FICTICIO);
+
+        assertThat(resultadoPadrao.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(Bloco::data, Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(8, 0), LocalTime.of(8, 25),
+                                TipoBloco.INTERROMPIVEL, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(9, 0), LocalTime.of(10, 29),
+                                TipoBloco.INTERROMPIVEL, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(11, 0), LocalTime.of(12, 30),
+                                TipoBloco.PROFUNDO, null));
+
+        // Limites customizados (60 / 15 min) comprovando uso exclusivo de configuracao.classificacao()
+        AgendaService custom = criarService(
+                new Jornada(LocalTime.of(7, 0), LocalTime.of(10, 0)),
+                new Margens(0, Map.of()),
+                new Classificacao(60, 15),
+                List.of(
+                        new Compromisso(DayOfWeek.MONDAY, LocalTime.of(7, 14), Duration.ofMinutes(46),
+                                TipoCompromisso.REUNIAO, null, null, "Deixa 14m e 60m"),
+                        new Compromisso(DayOfWeek.MONDAY, LocalTime.of(9, 0), Duration.ofMinutes(45),
+                                TipoCompromisso.REUNIAO, null, null, "Deixa 15m")),
+                List.of(),
+                RELOGIO_SEGUNDA_W48);
+
+        assertThat(custom.gerarSemana(CAMINHO_FICTICIO).semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(LocalTime.of(8, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO),
+                        org.assertj.core.groups.Tuple.tuple(LocalTime.of(9, 45), LocalTime.of(10, 0), TipoBloco.INTERROMPIVEL));
+    }
+
+    @Test
+    void deveConverterPlantaoParaVigilanciaRespeitandoMeiaNoiteLimitesSemanaisETipoEnum() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda 14:00–16:00 REUNIAO cujo título contém "Plantão" NÃO deve virar VIGILANCIA
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(14, 0), Duration.ofHours(2),
+                        TipoCompromisso.REUNIAO, "EmpresaA", "CASA", "Plantão pedagógico de dúvidas"),
+                // Segunda 22:30 + 3h PLANTAO cruza meia-noite -> Segunda 22:30–23:30 e Terça 01:00–01:30 na jornada 01:00–23:30
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(22, 30), Duration.ofHours(3),
+                        TipoCompromisso.PLANTAO, null, "CASA", "Atendimento noturno"),
+                // Domingo 22:30 + 3h PLANTAO -> Domingo 22:30–23:30 preservado e fração de segunda descartada com aviso
+                new Compromisso(DayOfWeek.SUNDAY, LocalTime.of(22, 30), Duration.ofHours(3),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão domingo"));
+
+        AgendaService service = criarService(
+                new Jornada(LocalTime.of(1, 0), LocalTime.of(23, 30)),
+                new Margens(0, Map.of()),
+                CLASSIFICACAO_PADRAO,
+                compromissos,
+                List.of(),
+                RELOGIO_SEGUNDA_W48);
+        SemanaPlanejada resultado = service.gerarSemana(CAMINHO_FICTICIO);
+
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.tipo() == TipoBloco.VIGILANCIA)
+                .extracting(Bloco::data, Bloco::inicio, Bloco::fim, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(22, 30), LocalTime.of(23, 30),
+                                "PLANTAO · CASA · Atendimento noturno"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 24), LocalTime.of(1, 0), LocalTime.of(1, 30),
+                                "PLANTAO · CASA · Atendimento noturno"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 29), LocalTime.of(22, 30), LocalTime.of(23, 30),
+                                "PLANTAO · Plantão domingo"));
+
+        assertThat(resultado.avisos()).containsExactly(
+                "Compromisso \"PLANTAO · Plantão domingo\" de domingo ultrapassa a semana; a fração de segunda-feira (00:00–01:30) foi descartada.");
+    }
+
+    @Test
+    void deveAplicarPrecedenciaManualTotalEParcialSobrePlantaoSemDescartarReuniaoCoincidente() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda: substituição total de PLANTAO 14:00–17:00
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(14, 0), Duration.ofHours(3),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão segunda"),
+                // Terça: substituição parcial no meio de PLANTAO 14:00–18:00 (preserva 14:00–15:00 e 16:30–18:00)
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(14, 0), Duration.ofHours(4),
+                        TipoCompromisso.PLANTAO, "EmpresaB", "CASA", "Plantão terça"),
+                // Quarta: PLANTAO 14:00–18:00 coincide com REUNIAO 15:00–16:00; BlocoManual 14:30–16:30
+                // NÃO pode sobrescrever a reunião (15:00–16:00 continua protegido)
+                new Compromisso(DayOfWeek.WEDNESDAY, LocalTime.of(14, 0), Duration.ofHours(4),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão quarta"),
+                new Compromisso(DayOfWeek.WEDNESDAY, LocalTime.of(15, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "Reunião coincidente"));
+
+        List<BlocoManual> manuais = List.of(
+                new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(14, 0), LocalTime.of(17, 0),
+                        TipoBloco.PROFUNDO, "Estudo no plantão total"),
+                new BlocoManual(DayOfWeek.TUESDAY, LocalTime.of(15, 0), LocalTime.of(16, 30),
+                        TipoBloco.INTERROMPIVEL, "Revisão parcial"),
+                new BlocoManual(DayOfWeek.WEDNESDAY, LocalTime.of(14, 30), LocalTime.of(16, 30),
+                        TipoBloco.PROFUNDO, "Estudo sobre reunião"));
+
+        AgendaService service = criarService(
+                JORNADA_PADRAO, new Margens(0, Map.of()), CLASSIFICACAO_PADRAO, compromissos, manuais, RELOGIO_SEGUNDA_W48);
+        SemanaPlanejada resultado = service.gerarSemana(CAMINHO_FICTICIO);
+
+        // Segunda 23/11: 07:00–14:00 PROFUNDO, 14:00–17:00 PROFUNDO manual (sem VIGILANCIA duplicado), 17:00–23:00 PROFUNDO
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(14, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(14, 0), LocalTime.of(17, 0), TipoBloco.PROFUNDO, "Estudo no plantão total"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(17, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        // Terça 24/11: preserva as duas partes restantes do PLANTAO como VIGILANCIA
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 24)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(14, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(14, 0), LocalTime.of(15, 0), TipoBloco.VIGILANCIA, "PLANTAO · EmpresaB · CASA · Plantão terça"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(15, 0), LocalTime.of(16, 30), TipoBloco.INTERROMPIVEL, "Revisão parcial"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(16, 30), LocalTime.of(18, 0), TipoBloco.VIGILANCIA, "PLANTAO · EmpresaB · CASA · Plantão terça"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(18, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        // Quarta 25/11: reunião 15:00–16:00 protegida (nem manual nem VIGILANCIA)
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 25)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(14, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(14, 0), LocalTime.of(14, 30), TipoBloco.VIGILANCIA, "PLANTAO · Plantão quarta"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(14, 30), LocalTime.of(15, 0), TipoBloco.PROFUNDO, "Estudo sobre reunião"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(16, 0), LocalTime.of(16, 30), TipoBloco.PROFUNDO, "Estudo sobre reunião"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(16, 30), LocalTime.of(18, 0), TipoBloco.VIGILANCIA, "PLANTAO · Plantão quarta"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(18, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        assertThat(resultado.avisos())
+                .containsExactly(
+                        "Bloco manual \"Estudo sobre reunião\" (PROFUNDO) em 2026-11-25 (14:30–16:30) foi recortado por conflito com ocupação não-plantão ou limites da jornada.");
+    }
+
+    @Test
+    void deveRecortarIntervaloLivrePorBlocoManualPreservandoTipoManualETratarConflitosEDescartes() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda: AULA 09:00–10:00 com margem antes 30m (08:30–10:00 ocupado) + REUNIAO 14:00–16:00
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(9, 0), Duration.ofHours(1),
+                        TipoCompromisso.AULA, "EmpresaA", null, "Aula manhã"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(14, 0), Duration.ofHours(2),
+                        TipoCompromisso.REUNIAO, null, null, "Reunião tarde"),
+                // Sexta: almoço 12:00–13:00, bloco manual 10:00–11:30 corta 07:00–12:00 em 07:00–10:00 PROFUNDO + 10:00–11:30 manual + 11:30–12:00 INTERROMPIVEL
+                new Compromisso(DayOfWeek.FRIDAY, LocalTime.of(12, 0), Duration.ofHours(1),
+                        TipoCompromisso.ALMOCO, null, null, "Almoço"));
+
+        List<BlocoManual> manuais = List.of(
+                // Segunda: sobrepõe parcialmente margem/aula (08:00–11:00 -> mantém 08:00–08:30 e 10:00–11:00)
+                new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(8, 0), LocalTime.of(11, 0),
+                        TipoBloco.PROFUNDO, "Conflito parcial"),
+                // Segunda: totalmente descartado (dentro da reunião 14:00–15:30) e outro fora da jornada (05:00–06:30)
+                new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(14, 0), LocalTime.of(15, 30),
+                        TipoBloco.PROFUNDO, "Totalmente ocupado"),
+                new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(5, 0), LocalTime.of(6, 30),
+                        TipoBloco.INTERROMPIVEL, "Fora da jornada"),
+                // Terça: bloco manual curto (20 min) preservado com tipo PROFUNDO e longo (2h) preservado com INTERROMPIVEL
+                new BlocoManual(DayOfWeek.TUESDAY, LocalTime.of(9, 0), LocalTime.of(9, 20),
+                        TipoBloco.PROFUNDO, "Manual curto"),
+                new BlocoManual(DayOfWeek.TUESDAY, LocalTime.of(14, 0), LocalTime.of(16, 0),
+                        TipoBloco.INTERROMPIVEL, "Manual longo"),
+                // Sexta: recorta 07:00–12:00
+                new BlocoManual(DayOfWeek.FRIDAY, LocalTime.of(10, 0), LocalTime.of(11, 30),
+                        TipoBloco.PROFUNDO, "Reserva manual"));
+
+        AgendaService service = criarService(
+                JORNADA_PADRAO, new Margens(0, EMPRESAS_PADRAO), CLASSIFICACAO_PADRAO, compromissos, manuais, RELOGIO_SEGUNDA_W48);
+        SemanaPlanejada resultado = service.gerarSemana(CAMINHO_FICTICIO);
+
+        // Segunda 23/11: 07:00–08:00 INTERROMPIVEL | 08:00–08:30 PROFUNDO manual | 10:00–11:00 PROFUNDO manual | 11:00–14:00 PROFUNDO | 16:00–23:00 PROFUNDO
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(8, 0), TipoBloco.INTERROMPIVEL, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(8, 0), LocalTime.of(8, 30), TipoBloco.PROFUNDO, "Conflito parcial"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(10, 0), LocalTime.of(11, 0), TipoBloco.PROFUNDO, "Conflito parcial"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(11, 0), LocalTime.of(14, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(16, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        // Terça 24/11: tipos manuais preservados sem reclassificação por duração
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 24)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(9, 0), LocalTime.of(9, 20), TipoBloco.PROFUNDO, "Manual curto"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(9, 20), LocalTime.of(14, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(14, 0), LocalTime.of(16, 0), TipoBloco.INTERROMPIVEL, "Manual longo"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(16, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        // Sexta 27/11: 07:00–10:00 PROFUNDO | 10:00–11:30 PROFUNDO manual | 11:30–12:00 INTERROMPIVEL | 13:00–23:00 PROFUNDO
+        assertThat(resultado.semana().blocos())
+                .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 27)))
+                .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(7, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(10, 0), LocalTime.of(11, 30), TipoBloco.PROFUNDO, "Reserva manual"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(11, 30), LocalTime.of(12, 0), TipoBloco.INTERROMPIVEL, null),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalTime.of(13, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+        assertThat(resultado.avisos()).containsExactly(
+                "Bloco manual \"Fora da jornada\" (INTERROMPIVEL) em 2026-11-23 (05:00–06:30) foi descartado por conflito com ocupação não-plantão ou por estar fora da jornada.",
+                "Bloco manual \"Conflito parcial\" (PROFUNDO) em 2026-11-23 (08:00–11:00) foi recortado por conflito com ocupação não-plantão ou limites da jornada.",
+                "Bloco manual \"Totalmente ocupado\" (PROFUNDO) em 2026-11-23 (14:00–15:30) foi descartado por conflito com ocupação não-plantão ou por estar fora da jornada.");
+    }
+
+    @Test
+    void deveCarregarAgendaUmaUnicaVezRejeitarBlocosManuaisSobrepostosECalcularAnoIsoNaViradaDeAno() {
+        AtomicInteger leituras = new AtomicInteger();
+        AgendaConfiguracao configComValidacao = new AgendaConfiguracao(
+                JORNADA_PADRAO,
+                new Margens(0, Map.of()),
+                CLASSIFICACAO_PADRAO,
+                List.of(),
+                List.of());
+        AgendaRepository repoContado = caminho -> {
+            leituras.incrementAndGet();
+            return configComValidacao;
+        };
+
+        // Virada 2025 -> 2026: 2025-12-30 (terça) pertence à semana ISO 2026-W01 (segunda 2025-12-29)
+        Clock relogioVirada2026 = Clock.fixed(
+                LocalDate.of(2025, 12, 30).atTime(10, 0).atZone(SAO_PAULO).toInstant(),
+                SAO_PAULO);
+        SemanaPlanejada virada2026 = new AgendaService(repoContado, relogioVirada2026).gerarSemana(CAMINHO_FICTICIO);
+
+        assertThat(leituras.get()).isEqualTo(1);
+        assertThat(virada2026.inicioSemana()).isEqualTo(LocalDate.of(2025, 12, 29));
+        assertThat(virada2026.semana().ano()).isEqualTo(2026);
+        assertThat(virada2026.semana().numeroIso()).isEqualTo(1);
+
+        // Virada 2020 -> 2021: 2021-01-01 (sexta) pertence à semana ISO 2020-W53 (segunda 2020-12-28)
+        Clock relogioVirada2020 = Clock.fixed(
+                LocalDate.of(2021, 1, 1).atTime(10, 0).atZone(SAO_PAULO).toInstant(),
+                SAO_PAULO);
+        SemanaPlanejada virada2020 = new AgendaService(repoContado, relogioVirada2020).gerarSemana(CAMINHO_FICTICIO);
+        assertThat(virada2020.inicioSemana()).isEqualTo(LocalDate.of(2020, 12, 28));
+        assertThat(virada2020.semana().ano()).isEqualTo(2020);
+        assertThat(virada2020.semana().numeroIso()).isEqualTo(53);
+
+        // Dois BlocoManual sobrepostos no mesmo dia mesmo via repositório em memória devem falhar explicitamente
+        AgendaService comManuaisSobrepostos = criarService(
+                JORNADA_PADRAO,
+                new Margens(0, Map.of()),
+                CLASSIFICACAO_PADRAO,
+                List.of(),
+                List.of(
+                        new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(11, 0),
+                                TipoBloco.PROFUNDO, null),
+                        new BlocoManual(DayOfWeek.MONDAY, LocalTime.of(10, 30), LocalTime.of(12, 0),
+                                TipoBloco.INTERROMPIVEL, "Sobreposto")),
+                RELOGIO_SEGUNDA_W48);
+        assertThatThrownBy(() -> comManuaisSobrepostos.gerarSemana(CAMINHO_FICTICIO))
+                .isInstanceOf(DadosInvalidosException.class)
+                .hasMessageContaining("sobrepostos");
+    }
+
+    @Test
+    void deveGerarSemanaCompletaDaAgendaExemploComDeterminismoEImutabilidade() {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            AgendaRepository yamlRepo = new YamlAgendaRepository(
+                    new ObjectMapper(new YAMLFactory()),
+                    factory.getValidator());
+            AgendaService service = new AgendaService(yamlRepo, RELOGIO_SEGUNDA_W48);
+
+            SemanaPlanejada primeiraExecucao = service.gerarSemana(Path.of("exemplos/agenda.exemplo.yaml"));
+            SemanaPlanejada segundaExecucao = service.gerarSemana(Path.of("exemplos/agenda.exemplo.yaml"));
+
+            assertThat(primeiraExecucao).isEqualTo(segundaExecucao);
+            assertThat(primeiraExecucao.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 23));
+            assertThat(primeiraExecucao.avisos()).isEmpty();
+
+            Semana semana = primeiraExecucao.semana();
+            assertThat(semana.ano()).isEqualTo(2026);
+            assertThat(semana.numeroIso()).isEqualTo(48);
+            assertThat(semana.compromissos()).hasSize(18);
+
+            // Segunda 23/11: 17:45–18:00 (15 min) foi descartado por ser < 25 min
+            assertThat(semana.blocos())
+                    .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 23)))
+                    .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(7, 0), LocalTime.of(8, 30), TipoBloco.PROFUNDO, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(11, 30), LocalTime.of(12, 0), TipoBloco.INTERROMPIVEL, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(13, 0), LocalTime.of(15, 30), TipoBloco.PROFUNDO, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(19, 30), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+            // Quarta 25/11: PLANTAO 15:00–17:00 substituído pelo BlocoManual VIGILANCIA sem duplicação
+            assertThat(semana.blocos())
+                    .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 25)))
+                    .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(7, 0), LocalTime.of(8, 0), TipoBloco.INTERROMPIVEL, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(9, 15), LocalTime.of(10, 30), TipoBloco.INTERROMPIVEL, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(13, 30), LocalTime.of(15, 0), TipoBloco.PROFUNDO, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(15, 0), LocalTime.of(17, 0), TipoBloco.VIGILANCIA,
+                                    "Janela de plantão compatível apenas com tarefas leves"),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(17, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+            // Sexta 27/11: bloco manual 10:00–11:30 divide 07:00–12:00 em PROFUNDO + PROFUNDO manual + INTERROMPIVEL
+            assertThat(semana.blocos())
+                    .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 27)))
+                    .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(7, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(10, 0), LocalTime.of(11, 30), TipoBloco.PROFUNDO,
+                                    "Reserva manual para estudo prático"),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(11, 30), LocalTime.of(12, 0), TipoBloco.INTERROMPIVEL, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(13, 0), LocalTime.of(14, 30), TipoBloco.PROFUNDO, null),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(16, 45), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+            // Domingo 29/11: jornada inteira PROFUNDO
+            assertThat(semana.blocos())
+                    .filteredOn(b -> b.data().equals(LocalDate.of(2026, 11, 29)))
+                    .extracting(Bloco::inicio, Bloco::fim, Bloco::tipo, Bloco::descricao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalTime.of(7, 0), LocalTime.of(23, 0), TipoBloco.PROFUNDO, null));
+
+            assertThatThrownBy(() -> primeiraExecucao.avisos().add("novo"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> semana.blocos().clear())
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> semana.compromissos().clear())
+                    .isInstanceOf(UnsupportedOperationException.class);
+
+            // Invariantes de SemanaPlanejada
+            LocalDate segunda = LocalDate.of(2026, 11, 23);
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new SemanaPlanejada(null, semana, List.of()));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new SemanaPlanejada(segunda, null, List.of()));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new SemanaPlanejada(segunda, semana, null));
+            List<String> avisosMutaveis = new ArrayList<>(List.of("a"));
+            SemanaPlanejada copiaDefensiva = new SemanaPlanejada(segunda, semana, avisosMutaveis);
+            avisosMutaveis.clear();
+            assertThat(copiaDefensiva.avisos()).containsExactly("a");
+        }
+    }
+
     private static AgendaService criarService(
             Margens margens, List<Compromisso> compromissos, Clock clock) {
-        return criarService(JORNADA_PADRAO, margens, compromissos, clock);
+        return criarService(JORNADA_PADRAO, margens, CLASSIFICACAO_PADRAO, compromissos, List.of(), clock);
     }
 
     private static AgendaService criarService(
             Jornada jornada, Margens margens, List<Compromisso> compromissos, Clock clock) {
+        return criarService(jornada, margens, CLASSIFICACAO_PADRAO, compromissos, List.of(), clock);
+    }
+
+    private static AgendaService criarService(
+            Jornada jornada,
+            Margens margens,
+            Classificacao classificacao,
+            List<Compromisso> compromissos,
+            List<BlocoManual> blocosManuais,
+            Clock clock) {
         AgendaConfiguracao config = new AgendaConfiguracao(
-                jornada, margens, CLASSIFICACAO_PADRAO, compromissos, List.of());
+                jornada, margens, classificacao, compromissos, blocosManuais);
         AgendaRepository repoEmMemoria = caminho -> config;
         return new AgendaService(repoEmMemoria, clock);
     }

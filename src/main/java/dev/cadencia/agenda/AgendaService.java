@@ -1,9 +1,14 @@
 package dev.cadencia.agenda;
 
 import dev.cadencia.dominio.AgendaConfiguracao;
+import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.BlocoManual;
+import dev.cadencia.dominio.Classificacao;
 import dev.cadencia.dominio.Compromisso;
 import dev.cadencia.dominio.Jornada;
 import dev.cadencia.dominio.MargemEmpresa;
+import dev.cadencia.dominio.Semana;
+import dev.cadencia.dominio.TipoBloco;
 import dev.cadencia.dominio.TipoCompromisso;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -12,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,8 +30,8 @@ import java.util.Objects;
 
 /**
  * Serviço responsável por expandir os compromissos da agenda na semana ISO atual, aplicar margens
- * configuráveis por empresa, gerar deslocamentos automáticos entre locais distintos e calcular os
- * intervalos livres da jornada diária.
+ * configuráveis por empresa, gerar deslocamentos automáticos entre locais distintos, calcular os
+ * intervalos livres da jornada diária e classificar os blocos da {@link Semana}.
  */
 public class AgendaService {
 
@@ -41,6 +47,20 @@ public class AgendaService {
             .thenComparing(Compromisso::empresa, Comparator.nullsFirst(String::compareTo))
             .thenComparing(Compromisso::local, Comparator.nullsFirst(String::compareTo))
             .thenComparing(Compromisso::titulo, Comparator.nullsFirst(String::compareTo));
+
+    private static final Comparator<BlocoManual> ORDEM_BLOCOS_MANUAIS = Comparator
+            .comparing(BlocoManual::diaSemana)
+            .thenComparing(BlocoManual::inicio)
+            .thenComparing(BlocoManual::fim)
+            .thenComparing(BlocoManual::tipo)
+            .thenComparing(BlocoManual::descricao, Comparator.nullsFirst(String::compareTo));
+
+    private static final Comparator<Bloco> ORDEM_BLOCOS = Comparator
+            .comparing(Bloco::data)
+            .thenComparing(Bloco::inicio)
+            .thenComparing(Bloco::fim)
+            .thenComparing(Bloco::tipo)
+            .thenComparing(Bloco::descricao, Comparator.nullsFirst(String::compareTo));
 
     private static final Comparator<IntervaloOcupado> ORDEM_INTERVALOS = Comparator
             .comparing(IntervaloOcupado::data)
@@ -73,8 +93,7 @@ public class AgendaService {
         LocalDate inicioSemana = hoje.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate fimSemana = inicioSemana.plusDays(6);
 
-        List<Compromisso> compromissosOrdenados = new ArrayList<>(configuracao.compromissos());
-        compromissosOrdenados.sort(ORDEM_COMPROMISSOS);
+        List<Compromisso> compromissosOrdenados = ordenarCompromissos(configuracao.compromissos());
 
         List<IntervaloOcupado> intervalos = new ArrayList<>();
         List<String> avisos = new ArrayList<>();
@@ -91,7 +110,60 @@ public class AgendaService {
      * jornada diária, reutilizando a expansão completa e mesclando ocupações sobrepostas ou adjacentes.
      */
     public AgendaIntervalosLivres calcularIntervalosLivres(Path caminhoAgenda) {
+        return calcularIntervalosLivres(expandir(caminhoAgenda));
+    }
+
+    /**
+     * Classifica os intervalos livres, aplica blocos manuais com precedência sobre {@code PLANTAO}
+     * e monta a {@link Semana} ISO completa preservando avisos da expansão e conflitos manuais.
+     */
+    public SemanaPlanejada gerarSemana(Path caminhoAgenda) {
         AgendaExpandida expandida = expandir(caminhoAgenda);
+        AgendaConfiguracao configuracao = expandida.configuracao();
+        validarBlocosManuaisSemSobreposicao(configuracao.blocosManuais());
+
+        AgendaIntervalosLivres agendaLivre = calcularIntervalosLivres(expandida);
+        LocalDate inicioSemana = expandida.inicioSemana();
+        LocalDate fimSemana = inicioSemana.plusDays(DIAS_DA_SEMANA - 1L);
+
+        List<Compromisso> compromissosOrdenados = ordenarCompromissos(configuracao.compromissos());
+        Map<LocalDate, List<IntervaloLivre>> livresPorData = agruparLivresPorData(agendaLivre.intervalosLivres());
+        Map<LocalDate, List<FaixaNanos>> naoPlantaoPorData = new HashMap<>();
+        Map<LocalDate, List<CompromissoFragmento>> plantoesPorData = new HashMap<>();
+        classificarFragmentosDeOcupacao(
+                expandida, compromissosOrdenados, inicioSemana, fimSemana, naoPlantaoPorData, plantoesPorData);
+        Map<DayOfWeek, List<BlocoManual>> manuaisPorDia = agruparBlocosManuaisOrdenadosPorDia(
+                configuracao.blocosManuais());
+
+        List<Bloco> blocos = new ArrayList<>();
+        List<String> avisos = new ArrayList<>(expandida.avisos());
+        Jornada jornada = configuracao.jornada();
+        Classificacao classificacao = configuracao.classificacao();
+
+        for (int diaOffset = 0; diaOffset < DIAS_DA_SEMANA; diaOffset++) {
+            LocalDate data = inicioSemana.plusDays(diaOffset);
+            gerarBlocosDoDia(
+                    data,
+                    jornada,
+                    classificacao,
+                    livresPorData.getOrDefault(data, List.of()),
+                    ordenarEMesclar(naoPlantaoPorData.getOrDefault(data, List.of())),
+                    manuaisPorDia.getOrDefault(data.getDayOfWeek(), List.of()),
+                    plantoesPorData.getOrDefault(data, List.of()),
+                    blocos,
+                    avisos);
+        }
+
+        blocos.sort(ORDEM_BLOCOS);
+        Semana semana = new Semana(
+                inicioSemana.get(IsoFields.WEEK_BASED_YEAR),
+                inicioSemana.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR),
+                compromissosOrdenados,
+                blocos);
+        return new SemanaPlanejada(inicioSemana, semana, avisos);
+    }
+
+    private AgendaIntervalosLivres calcularIntervalosLivres(AgendaExpandida expandida) {
         Map<LocalDate, List<IntervaloOcupado>> ocupadosPorData = agruparOcupadosPorData(expandida.intervalosOcupados());
 
         LocalDate inicioSemana = expandida.inicioSemana();
@@ -109,6 +181,262 @@ public class AgendaService {
                 expandida.configuracao(),
                 intervalosLivres,
                 expandida.avisos());
+    }
+
+    private static List<Compromisso> ordenarCompromissos(List<Compromisso> compromissos) {
+        List<Compromisso> copia = new ArrayList<>(compromissos);
+        copia.sort(ORDEM_COMPROMISSOS);
+        return copia;
+    }
+
+    private static void validarBlocosManuaisSemSobreposicao(List<BlocoManual> blocosManuais) {
+        if (blocosManuais.size() < 2) {
+            return;
+        }
+        Map<DayOfWeek, List<BlocoManual>> porDia = agruparBlocosManuaisOrdenadosPorDia(blocosManuais);
+        for (List<BlocoManual> doDia : porDia.values()) {
+            BlocoManual anteriorMaiorFim = doDia.get(0);
+            for (int i = 1; i < doDia.size(); i++) {
+                BlocoManual atual = doDia.get(i);
+                if (atual.inicio().isBefore(anteriorMaiorFim.fim())) {
+                    throw new DadosInvalidosException(String.format(
+                            "Blocos manuais sobrepostos em %s: (%s–%s) e (%s–%s).",
+                            atual.diaSemana(),
+                            anteriorMaiorFim.inicio(),
+                            anteriorMaiorFim.fim(),
+                            atual.inicio(),
+                            atual.fim()));
+                }
+                if (atual.fim().isAfter(anteriorMaiorFim.fim())) {
+                    anteriorMaiorFim = atual;
+                }
+            }
+        }
+    }
+
+    private static Map<DayOfWeek, List<BlocoManual>> agruparBlocosManuaisOrdenadosPorDia(
+            List<BlocoManual> blocosManuais) {
+        List<BlocoManual> copiaOrdenada = new ArrayList<>(blocosManuais);
+        copiaOrdenada.sort(ORDEM_BLOCOS_MANUAIS);
+        Map<DayOfWeek, List<BlocoManual>> porDia = new EnumMap<>(DayOfWeek.class);
+        for (BlocoManual blocoManual : copiaOrdenada) {
+            porDia.computeIfAbsent(blocoManual.diaSemana(), ignored -> new ArrayList<>()).add(blocoManual);
+        }
+        return porDia;
+    }
+
+    private static Map<LocalDate, List<IntervaloLivre>> agruparLivresPorData(List<IntervaloLivre> intervalosLivres) {
+        Map<LocalDate, List<IntervaloLivre>> porData = new HashMap<>();
+        for (IntervaloLivre intervalo : intervalosLivres) {
+            porData.computeIfAbsent(intervalo.data(), ignored -> new ArrayList<>()).add(intervalo);
+        }
+        return porData;
+    }
+
+    private static void classificarFragmentosDeOcupacao(
+            AgendaExpandida expandida,
+            List<Compromisso> compromissosOrdenados,
+            LocalDate inicioSemana,
+            LocalDate fimSemana,
+            Map<LocalDate, List<FaixaNanos>> naoPlantaoPorData,
+            Map<LocalDate, List<CompromissoFragmento>> plantoesPorData) {
+
+        for (Compromisso compromisso : compromissosOrdenados) {
+            List<Compromisso> fragmentos = compromisso.fatiarPorDia();
+            LocalDate dataInicial = dataNaSemana(inicioSemana, compromisso.diaSemana());
+            for (int i = 0; i < fragmentos.size(); i++) {
+                LocalDate dataFragmento = dataInicial.plusDays(i);
+                if (dataFragmento.isAfter(fimSemana)) {
+                    continue;
+                }
+                Compromisso fragmento = fragmentos.get(i);
+                long inicioNanos = fragmento.inicio().toNanoOfDay();
+                long fimNanos = Math.min(inicioNanos + fragmento.duracao().toNanos(), NANOS_POR_DIA);
+                FaixaNanos faixa = new FaixaNanos(inicioNanos, fimNanos);
+                if (compromisso.tipo() == TipoCompromisso.PLANTAO) {
+                    plantoesPorData.computeIfAbsent(dataFragmento, ignored -> new ArrayList<>())
+                            .add(new CompromissoFragmento(faixa, descreverCompromisso(compromisso)));
+                } else {
+                    naoPlantaoPorData.computeIfAbsent(dataFragmento, ignored -> new ArrayList<>()).add(faixa);
+                }
+            }
+        }
+
+        for (IntervaloOcupado ocupado : expandida.intervalosOcupados()) {
+            if (ocupado.tipo() != TipoIntervaloOcupado.COMPROMISSO) {
+                FaixaNanos faixa = new FaixaNanos(ocupado.inicio().toNanoOfDay(), fimEmNanosNoDia(ocupado));
+                naoPlantaoPorData.computeIfAbsent(ocupado.data(), ignored -> new ArrayList<>()).add(faixa);
+            }
+        }
+    }
+
+    private static void gerarBlocosDoDia(
+            LocalDate data,
+            Jornada jornada,
+            Classificacao classificacao,
+            List<IntervaloLivre> livresDoDia,
+            List<FaixaNanos> naoPlantaoMescladas,
+            List<BlocoManual> manuaisDoDia,
+            List<CompromissoFragmento> plantoesDoDia,
+            List<Bloco> blocos,
+            List<String> avisos) {
+
+        long inicioJanelaNanos = jornada.inicio().toNanoOfDay();
+        long fimJanelaNanos = jornada.fim().toNanoOfDay();
+
+        List<FaixaNanos> faixasManuaisEfetivas = processarBlocosManuaisDoDia(
+                data, inicioJanelaNanos, fimJanelaNanos, naoPlantaoMescladas, manuaisDoDia, blocos, avisos);
+        List<FaixaNanos> manuaisMescladas = ordenarEMesclar(faixasManuaisEfetivas);
+
+        classificarIntervalosLivresDoDia(data, classificacao, livresDoDia, manuaisMescladas, blocos);
+        gerarBlocosPlantaoDoDia(
+                data,
+                inicioJanelaNanos,
+                fimJanelaNanos,
+                naoPlantaoMescladas,
+                manuaisMescladas,
+                plantoesDoDia,
+                blocos);
+    }
+
+    private static List<FaixaNanos> processarBlocosManuaisDoDia(
+            LocalDate data,
+            long inicioJanelaNanos,
+            long fimJanelaNanos,
+            List<FaixaNanos> naoPlantaoMescladas,
+            List<BlocoManual> manuaisDoDia,
+            List<Bloco> blocos,
+            List<String> avisos) {
+
+        List<FaixaNanos> efetivas = new ArrayList<>();
+        for (BlocoManual manual : manuaisDoDia) {
+            long inicioOriginal = manual.inicio().toNanoOfDay();
+            long fimOriginal = manual.fim().toNanoOfDay();
+            long inicioRecortado = Math.max(inicioOriginal, inicioJanelaNanos);
+            long fimRecortado = Math.min(fimOriginal, fimJanelaNanos);
+
+            List<FaixaNanos> fatiasValidas = inicioRecortado < fimRecortado
+                    ? subtrairFaixas(inicioRecortado, fimRecortado, naoPlantaoMescladas)
+                    : List.of();
+
+            long duracaoOriginal = fimOriginal - inicioOriginal;
+            long duracaoValida = fatiasValidas.stream().mapToLong(FaixaNanos::duracaoNanos).sum();
+            if (duracaoValida == 0) {
+                avisos.add(String.format(
+                        "Bloco manual %s em %s (%s–%s) foi descartado por conflito com ocupação não-plantão ou por estar fora da jornada.",
+                        descreverBlocoManual(manual), data, manual.inicio(), manual.fim()));
+                continue;
+            }
+            if (duracaoValida < duracaoOriginal) {
+                avisos.add(String.format(
+                        "Bloco manual %s em %s (%s–%s) foi recortado por conflito com ocupação não-plantão ou limites da jornada.",
+                        descreverBlocoManual(manual), data, manual.inicio(), manual.fim()));
+            }
+            for (FaixaNanos fatia : fatiasValidas) {
+                efetivas.add(fatia);
+                blocos.add(new Bloco(
+                        data,
+                        LocalTime.ofNanoOfDay(fatia.inicio()),
+                        LocalTime.ofNanoOfDay(fatia.fim()),
+                        manual.tipo(),
+                        manual.descricao()));
+            }
+        }
+        return efetivas;
+    }
+
+    private static void classificarIntervalosLivresDoDia(
+            LocalDate data,
+            Classificacao classificacao,
+            List<IntervaloLivre> livresDoDia,
+            List<FaixaNanos> manuaisMescladas,
+            List<Bloco> blocos) {
+
+        Duration minimoProfundo = Duration.ofMinutes(classificacao.profundoMinimoMin());
+        Duration minimoInterrompivel = Duration.ofMinutes(classificacao.interrompivelMinimoMin());
+
+        for (IntervaloLivre livre : livresDoDia) {
+            List<FaixaNanos> fatiasLivres = subtrairFaixas(
+                    livre.inicio().toNanoOfDay(), livre.fim().toNanoOfDay(), manuaisMescladas);
+            for (FaixaNanos fatia : fatiasLivres) {
+                Duration duracao = Duration.ofNanos(fatia.duracaoNanos());
+                TipoBloco tipoClassificado;
+                if (duracao.compareTo(minimoProfundo) >= 0) {
+                    tipoClassificado = TipoBloco.PROFUNDO;
+                } else if (duracao.compareTo(minimoInterrompivel) >= 0) {
+                    tipoClassificado = TipoBloco.INTERROMPIVEL;
+                } else {
+                    continue;
+                }
+                blocos.add(new Bloco(
+                        data,
+                        LocalTime.ofNanoOfDay(fatia.inicio()),
+                        LocalTime.ofNanoOfDay(fatia.fim()),
+                        tipoClassificado,
+                        null));
+            }
+        }
+    }
+
+    private static void gerarBlocosPlantaoDoDia(
+            LocalDate data,
+            long inicioJanelaNanos,
+            long fimJanelaNanos,
+            List<FaixaNanos> naoPlantaoMescladas,
+            List<FaixaNanos> manuaisMescladas,
+            List<CompromissoFragmento> plantoesDoDia,
+            List<Bloco> blocos) {
+
+        if (plantoesDoDia.isEmpty()) {
+            return;
+        }
+        List<FaixaNanos> bloqueios = combinarEMesclar(naoPlantaoMescladas, manuaisMescladas);
+        for (CompromissoFragmento plantao : plantoesDoDia) {
+            long inicioRecortado = Math.max(plantao.faixa().inicio(), inicioJanelaNanos);
+            long fimRecortado = Math.min(plantao.faixa().fim(), fimJanelaNanos);
+            if (inicioRecortado >= fimRecortado) {
+                continue;
+            }
+            List<FaixaNanos> restantes = subtrairFaixas(inicioRecortado, fimRecortado, bloqueios);
+            if (restantes.isEmpty()) {
+                continue;
+            }
+            for (FaixaNanos fatia : restantes) {
+                blocos.add(new Bloco(
+                        data,
+                        LocalTime.ofNanoOfDay(fatia.inicio()),
+                        LocalTime.ofNanoOfDay(fatia.fim()),
+                        TipoBloco.VIGILANCIA,
+                        plantao.descricao()));
+            }
+            bloqueios = combinarEMesclar(bloqueios, restantes);
+        }
+    }
+
+    private static List<FaixaNanos> combinarEMesclar(List<FaixaNanos> primeira, List<FaixaNanos> segunda) {
+        if (primeira.isEmpty() && segunda.isEmpty()) {
+            return List.of();
+        }
+        List<FaixaNanos> combinadas = new ArrayList<>(primeira.size() + segunda.size());
+        combinadas.addAll(primeira);
+        combinadas.addAll(segunda);
+        return ordenarEMesclar(combinadas);
+    }
+
+    private static List<FaixaNanos> ordenarEMesclar(List<FaixaNanos> faixas) {
+        if (faixas.isEmpty()) {
+            return List.of();
+        }
+        List<FaixaNanos> ordenadas = new ArrayList<>(faixas);
+        ordenadas.sort(ORDEM_FAIXAS);
+        return mesclarSobreposicoesEAdjacencias(ordenadas);
+    }
+
+    private static String descreverBlocoManual(BlocoManual manual) {
+        if (manual.descricao() != null && !manual.descricao().isBlank()) {
+            return "\"" + manual.descricao().trim() + "\" (" + manual.tipo() + ")";
+        }
+        return manual.tipo().name();
     }
 
     private static Map<LocalDate, List<IntervaloOcupado>> agruparOcupadosPorData(
@@ -130,8 +458,7 @@ public class AgendaService {
             return List.of(new IntervaloLivre(data, jornada.inicio(), jornada.fim()));
         }
 
-        recortados.sort(ORDEM_FAIXAS);
-        List<FaixaNanos> ocupacoesMescladas = mesclarSobreposicoesEAdjacencias(recortados);
+        List<FaixaNanos> ocupacoesMescladas = ordenarEMesclar(recortados);
         return subtrairOcupacoesDaJanela(data, inicioJanelaNanos, fimJanelaNanos, ocupacoesMescladas);
     }
 
@@ -172,26 +499,39 @@ public class AgendaService {
 
     private static List<IntervaloLivre> subtrairOcupacoesDaJanela(
             LocalDate data, long inicioJanelaNanos, long fimJanelaNanos, List<FaixaNanos> ocupacoesMescladas) {
-        List<IntervaloLivre> livres = new ArrayList<>();
-        long cursorNanos = inicioJanelaNanos;
-
-        for (FaixaNanos ocupacao : ocupacoesMescladas) {
-            if (ocupacao.inicio() > cursorNanos) {
-                livres.add(new IntervaloLivre(
+        return subtrairFaixas(inicioJanelaNanos, fimJanelaNanos, ocupacoesMescladas).stream()
+                .map(faixa -> new IntervaloLivre(
                         data,
-                        LocalTime.ofNanoOfDay(cursorNanos),
-                        LocalTime.ofNanoOfDay(ocupacao.inicio())));
+                        LocalTime.ofNanoOfDay(faixa.inicio()),
+                        LocalTime.ofNanoOfDay(faixa.fim())))
+                .toList();
+    }
+
+    private static List<FaixaNanos> subtrairFaixas(
+            long alvoInicio, long alvoFim, List<FaixaNanos> bloqueiosMesclados) {
+        List<FaixaNanos> restantes = new ArrayList<>();
+        long cursorNanos = alvoInicio;
+
+        for (FaixaNanos bloqueio : bloqueiosMesclados) {
+            if (bloqueio.fim() <= cursorNanos) {
+                continue;
             }
-            cursorNanos = Math.max(cursorNanos, ocupacao.fim());
+            if (bloqueio.inicio() >= alvoFim) {
+                break;
+            }
+            if (bloqueio.inicio() > cursorNanos) {
+                restantes.add(new FaixaNanos(cursorNanos, bloqueio.inicio()));
+            }
+            cursorNanos = Math.max(cursorNanos, bloqueio.fim());
+            if (cursorNanos >= alvoFim) {
+                break;
+            }
         }
 
-        if (cursorNanos < fimJanelaNanos) {
-            livres.add(new IntervaloLivre(
-                    data,
-                    LocalTime.ofNanoOfDay(cursorNanos),
-                    LocalTime.ofNanoOfDay(fimJanelaNanos)));
+        if (cursorNanos < alvoFim) {
+            restantes.add(new FaixaNanos(cursorNanos, alvoFim));
         }
-        return livres;
+        return restantes;
     }
 
     private static long fimEmNanosNoDia(IntervaloOcupado ocupado) {
@@ -200,6 +540,12 @@ public class AgendaService {
     }
 
     private record FaixaNanos(long inicio, long fim) {
+        long duracaoNanos() {
+            return fim - inicio;
+        }
+    }
+
+    private record CompromissoFragmento(FaixaNanos faixa, String descricao) {
     }
 
     private static Map<DayOfWeek, List<Compromisso>> agruparPorDiaOrdenado(
