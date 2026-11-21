@@ -71,7 +71,7 @@ cadencia/
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
     │       └── Turma.java
-    └── test/java/dev/cadencia/   # espelha a estrutura de main + ArquiteturaTest (ArchUnit)
+    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest) + ArquiteturaTest (ArchUnit estrito no Gate 2)
 ```
 
 > `groupId` definido: `dev.cadencia` (Q4 decidida).

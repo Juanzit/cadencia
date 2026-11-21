@@ -19,7 +19,7 @@
 
 | # | Arquivo | Entrega | Status |
 | :---: | :--- | :--- | :--- |
-| 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟡 Em Andamento (10/14 · 71% · Tarefa 2.5 concluída · próxima: Tarefa 2.6) |
+| 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟡 Em Andamento (11/14 · 79% · Fase 2 concluída / Gate 2 aprovado · próxima: Fase 2B — Tarefa 3.1) |
 | 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🔴 Não Iniciado |
 | 4 | `dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md` | Feedback e aprendizado de horários | 🔴 Não Iniciado |
 | 5 | `dev/tasks/_4_TASKS_TURMAS.md` | Previsão de turmas | 🔴 Não Iniciado |

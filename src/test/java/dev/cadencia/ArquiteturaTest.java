@@ -18,9 +18,10 @@ import com.tngtech.archunit.lang.ArchRule;
  * {@code *Service}. Por isso as regras identificam papéis por convenção de nome/tipo, e não por
  * pacotes globais {@code service}/{@code repository}.
  *
- * <p><b>TEMPORÁRIO (Fase 1):</b> todas as regras usam {@code allowEmptyShould(true)} porque os
- * pacotes ainda estão vazios. <b>No Gate 2 (dev/tasks/_1_TASKS_SETUP.md) é obrigatório remover
- * {@code allowEmptyShould(true)}</b> para que a validação passe a ser estrita.
+ * <p><b>Validação estrita (Gate 2):</b> {@code allowEmptyShould(true)} foi removido das três
+ * regras que já possuem classes concretas ({@code dominio}, {@code agenda}, services e repositories).
+ * Apenas {@code cliNaoAcessaAdaptersNemArquivos} mantém {@code allowEmptyShould(true)} até a
+ * conclusão da Tarefa 3.2 (Gate 3), quando o pacote {@code dev.cadencia.cli} receber os comandos Picocli.
  */
 @AnalyzeClasses(packages = "dev.cadencia", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArquiteturaTest {
@@ -51,10 +52,14 @@ class ArquiteturaTest {
                     "com.fasterxml.jackson..",
                     "java.io..",
                     "java.nio.file..")
-            .because("o domínio deve ser composto de records e regras puras (dev/RULES.md §1)")
-            .allowEmptyShould(true);
+            .because("o domínio deve ser composto de records e regras puras (dev/RULES.md §1)");
 
-    // Regra B — CLI conversa com services, nunca com repositórios, adapters ou arquivos.
+    /**
+     * Regra B — CLI conversa apenas com services, nunca com repositórios, adapters ou arquivos.
+     *
+     * <p>Mantém {@code allowEmptyShould(true)} temporariamente até o Gate 3, após a conclusão da
+     * Tarefa 3.2, quando os comandos Picocli forem implementados em {@code dev.cadencia.cli}.
+     */
     @ArchTest
     static final ArchRule cliNaoAcessaAdaptersNemArquivos = noClasses()
             .that().resideInAPackage("dev.cadencia.cli..")
@@ -67,8 +72,7 @@ class ArquiteturaTest {
     static final ArchRule servicesDependemDeInterfacesRepository = noClasses()
             .that().haveSimpleNameEndingWith("Service")
             .should().dependOnClassesThat(ADAPTER_REPOSITORY)
-            .because("services devem depender da porta *Repository, permitindo trocar o adapter")
-            .allowEmptyShould(true);
+            .because("services devem depender da porta *Repository, permitindo trocar o adapter");
 
     // Direção CLI -> SERVICE -> REPOSITORY -> ADAPTER: camadas inferiores não conhecem a CLI.
     @ArchTest
@@ -77,6 +81,5 @@ class ArquiteturaTest {
             .or().haveSimpleNameEndingWith("Repository")
             .or().resideInAPackage("dev.cadencia.dominio..")
             .should().dependOnClassesThat().resideInAPackage("dev.cadencia.cli..")
-            .because("a dependência flui da CLI para baixo, nunca o contrário")
-            .allowEmptyShould(true);
+            .because("a dependência flui da CLI para baixo, nunca o contrário");
 }

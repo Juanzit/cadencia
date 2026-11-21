@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 10 (71%)
+* **Concluídas:** 11 (79%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 4 (29%)
+* **Pendentes:** 3 (21%)
 
 ---
 
@@ -47,14 +47,14 @@
 | 2.3 | Implementar em `AgendaService` a aplicação das margens configuráveis: 30 min antes da aula EmpresaA; 30 min antes e 15 min depois da aula EmpresaB; deslocamento de 30 min entre locais | Service | Crítica | 🟢 Concluído |
 | 2.4 | Implementar o cálculo dos intervalos livres da semana (subtração de compromissos e margens, mesclando sobreposições) com `Clock` injetado | Service | Crítica | 🟢 Concluído |
 | 2.5 | Implementar a classificação dos blocos livres em `PROFUNDO`, `INTERROMPIVEL` e `VIGILANCIA` (por regra configurável em `agenda.yaml`, incluindo `blocos_manuais`; AE vazia e plantão entram como `VIGILANCIA`) | Service | Alta | 🟢 Concluído |
-| 2.6 | Escrever testes dos casos de borda: margens sobrepostas, compromisso colado em outro, dia totalmente ocupado, dia vazio, compromisso após as 22h, compromisso que cruza a meia-noite (fatiado em dois intervalos, ocupando o fim de um dia e o início do seguinte), semana com dia sem academia | Testes | Crítica | 🔴 Não Iniciado |
+| 2.6 | Escrever testes dos casos de borda: margens sobrepostas, compromisso colado em outro, dia totalmente ocupado, dia vazio, compromisso após as 22h, compromisso que cruza a meia-noite (fatiado em dois intervalos, ocupando o fim de um dia e o início do seguinte), semana com dia sem academia | Testes | Crítica | 🟢 Concluído |
 
 ### ✅ Gate 2 — Núcleo de Agenda
-- [ ] Todos os testes de `dominio` e `agenda` passam
-- [ ] Cobertura ≥ 80% em `dominio` e `agenda`
-- [ ] Para `exemplos/agenda.exemplo.yaml`, os blocos calculados à mão batem com a saída do serviço (conferir ao menos 3 dias)
-- [ ] YAML com erro de sintaxe gera erro com arquivo, linha e coluna; YAML com campo inválido gera erro com arquivo e caminho `compromissos[i].campo`
-- [ ] `ArquiteturaTest` passa **sem** `allowEmptyShould(true)` (validação estrita)
+- [x] Todos os testes de `dominio` e `agenda` passam
+- [x] Cobertura ≥ 80% em `dominio` e `agenda`
+- [x] Para `exemplos/agenda.exemplo.yaml`, os blocos calculados à mão batem com a saída do serviço (conferir ao menos 3 dias)
+- [x] YAML com erro de sintaxe gera erro com arquivo, linha e coluna; YAML com campo inválido gera erro com arquivo e caminho `compromissos[i].campo`
+- [x] `ArquiteturaTest` passa **sem** `allowEmptyShould(true)` (validação estrita nas 3 regras com classes; exceção documentada em `cliNaoAcessaAdaptersNemArquivos` até o Gate 3, após a Tarefa 3.2)
 
 ---
 
