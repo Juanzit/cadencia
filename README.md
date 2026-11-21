@@ -2,7 +2,7 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Fase 2 em andamento — Núcleo de Agenda (leitura e validação da agenda YAML concluídas na Tarefa 2.2).
+**Status:** Fase 2 em andamento — Núcleo de Agenda (carregamento YAML e expansão de compromissos, margens e deslocamentos implementados até a Tarefa 2.3; cálculo de blocos livres entra na Tarefa 2.4).
 
 ## Stack
 
