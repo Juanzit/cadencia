@@ -371,9 +371,12 @@ class AgendaServiceTest {
         Clock relogioUtc = Clock.fixed(Instant.parse("2026-11-23T01:30:00Z"), ZoneOffset.UTC);
         AgendaService service = criarService(new Margens(0, Map.of()), List.of(), relogioUtc);
 
-        AgendaExpandida resultado = service.expandir(CAMINHO_FICTICIO);
+        AgendaExpandida expandida = service.expandir(CAMINHO_FICTICIO);
+        AgendaIntervalosLivres livres = service.calcularIntervalosLivres(CAMINHO_FICTICIO);
 
-        assertThat(resultado.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 16));
+        assertThat(expandida.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 16));
+        assertThat(livres.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 16));
+        assertThat(livres.intervalosLivres().get(0).data()).isEqualTo(LocalDate.of(2026, 11, 16));
     }
 
     @Test
@@ -447,10 +450,327 @@ class AgendaServiceTest {
         assertThat(expandida.avisos()).isEmpty();
     }
 
+    @Test
+    void deveGerarUmIntervaloPorDiaParaSemanaOuDomingoTotalmenteLivres() {
+        AgendaService semCompromissos = criarService(new Margens(0, Map.of()), List.of(), RELOGIO_SEGUNDA_W48);
+        AgendaIntervalosLivres resultado = semCompromissos.calcularIntervalosLivres(CAMINHO_FICTICIO);
+
+        assertThat(resultado.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 23));
+        assertThat(resultado.avisos()).isEmpty();
+        assertThat(resultado.intervalosLivres())
+                .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 24), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 25), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 26), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 27), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 28), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 29), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)));
+    }
+
+    @Test
+    void naoDeveGerarIntervalosLivresEmDiaTotalmenteOcupado() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda: ocupação exata 07:00–23:00
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(7, 0), Duration.ofHours(16),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão dia inteiro"),
+                // Terça: soma contínua excedendo a janela (06:00–15:00 + 15:00–00:00)
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(6, 0), Duration.ofHours(9),
+                        TipoCompromisso.PLANTAO, null, null, "Manhã/tarde"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(15, 0), Duration.ofHours(9),
+                        TipoCompromisso.PLANTAO, null, null, "Tarde/noite até 00h"));
+
+        AgendaService service = criarService(new Margens(0, Map.of()), compromissos, RELOGIO_SEGUNDA_W48);
+        AgendaIntervalosLivres resultado = service.calcularIntervalosLivres(CAMINHO_FICTICIO);
+
+        assertThat(resultado.intervalosLivres())
+                .noneMatch(i -> i.data().equals(LocalDate.of(2026, 11, 23))
+                        || i.data().equals(LocalDate.of(2026, 11, 24)));
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 29)))
+                .extracting(IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)));
+    }
+
+    @Test
+    void deveMesclarSobreposicoesEAdjacenciasComMargensEDeslocamento() {
+        List<Compromisso> compromissos = List.of(
+                // 08:00–09:00 CASA
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(8, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, "CASA", "Reunião inicial"),
+                // 09:30–11:00 AULA EmpresaB UNIDADE_CENTRO => MARGEM_ANTES 09:00–09:30,
+                // DESLOCAMENTO_AUTOMATICO 09:00–09:30 (sobreposto) e MARGEM_DEPOIS 11:00–11:15
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(9, 30), Duration.ofMinutes(90),
+                        TipoCompromisso.AULA, "EmpresaB", "UNIDADE_CENTRO", "Aula centro"),
+                // 10:45–12:00 sobrepõe aula e MARGEM_DEPOIS
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(10, 45), Duration.ofMinutes(75),
+                        TipoCompromisso.REUNIAO, null, "UNIDADE_CENTRO", "Reunião sobreposta"),
+                // 12:00–13:00 adjacente a 12:00 => bloco ocupado contínuo [08:00, 13:00)
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(12, 0), Duration.ofHours(1),
+                        TipoCompromisso.ALMOCO, null, "UNIDADE_CENTRO", "Almoço"));
+
+        AgendaService service = criarService(new Margens(30, EMPRESAS_PADRAO), compromissos, RELOGIO_SEGUNDA_W48);
+        List<IntervaloLivre> livresSegunda = service.calcularIntervalosLivres(CAMINHO_FICTICIO)
+                .intervalosLivres().stream()
+                .filter(i -> i.data().equals(LocalDate.of(2026, 11, 23)))
+                .toList();
+
+        assertThat(livresSegunda)
+                .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(7, 0), LocalTime.of(8, 0), Duration.ofHours(1)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(13, 0), LocalTime.of(23, 0), Duration.ofHours(10)));
+    }
+
+    @Test
+    void deveRecortarOcupacoesAntesDoInicioEDepoisDoFimDaJornadaIncluindoMeiaNoite() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda (jornada 07:00–23:00):
+                // 05:00–06:30 fora da jornada; aula 07:10–08:00 gera margem antes 06:40–07:10 (recortada em 07:00)
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(5, 0), Duration.ofMinutes(90),
+                        TipoCompromisso.TREINO, null, null, "Antes da jornada"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(7, 10), Duration.ofMinutes(50),
+                        TipoCompromisso.AULA, "EmpresaA", null, "Aula cedo"),
+                // Segunda: 22:00 + 2h = 22:00–00:00 (término MIDNIGHT -> 86_400s em nanos -> recortado para 22:00–23:00)
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(22, 0), Duration.ofHours(2),
+                        TipoCompromisso.PLANTAO, null, null, "Plantão até 00h"),
+                // Terça: 23:00–00:00 está totalmente após a jornada 07:00–23:00 -> ignorado
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(23, 0), Duration.ofHours(1),
+                        TipoCompromisso.PLANTAO, null, null, "Após a jornada"),
+                // Quarta: aula 22:00–22:50 (margem depois 22:50–23:05) recortada pelo fim da jornada 23:00
+                new Compromisso(DayOfWeek.WEDNESDAY, LocalTime.of(22, 0), Duration.ofMinutes(50),
+                        TipoCompromisso.AULA, "EmpresaB", null, "Aula noturna"));
+
+        AgendaService service = criarService(new Margens(0, EMPRESAS_PADRAO), compromissos, RELOGIO_SEGUNDA_W48);
+        AgendaIntervalosLivres resultado = service.calcularIntervalosLivres(CAMINHO_FICTICIO);
+
+        // Segunda: [08:00, 22:00) -> 14h
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        LocalTime.of(8, 0), LocalTime.of(22, 0), Duration.ofHours(14)));
+
+        // Terça: [07:00, 23:00) -> 16h (ocupação 23:00–00:00 não intersecta)
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 24)))
+                .extracting(IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)));
+
+        // Quarta: [07:00, 21:30) -> 14h30 (margem antes 21:30–22:00; aula+margem depois ultrapassam 23:00)
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 25)))
+                .extracting(IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        LocalTime.of(7, 0), LocalTime.of(21, 30), Duration.ofMinutes(870)));
+
+        // Jornada até 23:30 também deve tratar ocupação 23:00–00:00 com fim MIDNIGHT sem perder recorte 23:00–23:30
+        AgendaService ate2330 = criarService(
+                new Jornada(LocalTime.of(7, 0), LocalTime.of(23, 30)),
+                new Margens(0, Map.of()),
+                List.of(new Compromisso(DayOfWeek.MONDAY, LocalTime.of(23, 0), Duration.ofHours(1),
+                        TipoCompromisso.PLANTAO, null, null, "Até 00h")),
+                RELOGIO_SEGUNDA_W48);
+        assertThat(ate2330.calcularIntervalosLivres(CAMINHO_FICTICIO).intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(
+                        LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)));
+    }
+
+    @Test
+    void deveGerarMultiplosIntervalosLivresOrdenadosERespeitarFronteirasSemDuracaoZero() {
+        List<Compromisso> compromissos = List.of(
+                // Segunda: múltiplas ocupações fora de ordem de entrada
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(18, 0), Duration.ofMinutes(135),
+                        TipoCompromisso.AULA, null, null, "Noite"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(8, 0), Duration.ofHours(1),
+                        TipoCompromisso.TREINO, null, null, "Manhã"),
+                new Compromisso(DayOfWeek.MONDAY, LocalTime.of(11, 30), Duration.ofMinutes(90),
+                        TipoCompromisso.ALMOCO, null, null, "Almoço"),
+                // Terça: fronteiras exatas da jornada [07:00, 23:00) e blocos colados em 11:00
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(6, 0), Duration.ofHours(1),
+                        TipoCompromisso.TREINO, null, null, "Termina em 07:00"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(7, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "Inicia em 07:00"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(10, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "Colado 1"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(11, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, null, null, "Colado 2"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(22, 0), Duration.ofHours(1),
+                        TipoCompromisso.PLANTAO, null, null, "Termina em 23:00"),
+                new Compromisso(DayOfWeek.TUESDAY, LocalTime.of(23, 0), Duration.ofHours(1),
+                        TipoCompromisso.PLANTAO, null, null, "Inicia em 23:00"));
+
+        AgendaService service = criarService(new Margens(0, Map.of()), compromissos, RELOGIO_SEGUNDA_W48);
+        AgendaIntervalosLivres resultado = service.calcularIntervalosLivres(CAMINHO_FICTICIO);
+
+        assertThat(resultado.intervalosLivres())
+                .allSatisfy(i -> {
+                    assertThat(i.fim()).isAfter(i.inicio());
+                    assertThat(i.duracao()).isPositive();
+                });
+
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 23)))
+                .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(7, 0), LocalTime.of(8, 0), Duration.ofHours(1)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(9, 0), LocalTime.of(11, 30), Duration.ofMinutes(150)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(13, 0), LocalTime.of(18, 0), Duration.ofHours(5)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 23), LocalTime.of(20, 15), LocalTime.of(23, 0), Duration.ofMinutes(165)));
+
+        assertThat(resultado.intervalosLivres())
+                .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 24)))
+                .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 24), LocalTime.of(8, 0), LocalTime.of(10, 0), Duration.ofHours(2)),
+                        org.assertj.core.groups.Tuple.tuple(
+                                LocalDate.of(2026, 11, 24), LocalTime.of(12, 0), LocalTime.of(22, 0), Duration.ofHours(10)));
+    }
+
+    @Test
+    void deveCalcularIntervalosLivresExatosDaAgendaExemploPreservandoBlocosManuaisEImutabilidade() {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            AgendaRepository yamlRepo = new YamlAgendaRepository(
+                    new ObjectMapper(new YAMLFactory()),
+                    factory.getValidator());
+            AgendaService service = new AgendaService(yamlRepo, RELOGIO_SEGUNDA_W48);
+
+            AgendaIntervalosLivres primeiraExecucao = service.calcularIntervalosLivres(
+                    Path.of("exemplos/agenda.exemplo.yaml"));
+            AgendaIntervalosLivres segundaExecucao = service.calcularIntervalosLivres(
+                    Path.of("exemplos/agenda.exemplo.yaml"));
+
+            assertThat(primeiraExecucao).isEqualTo(segundaExecucao);
+            assertThat(primeiraExecucao.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 23));
+            assertThat(primeiraExecucao.configuracao().blocosManuais()).hasSize(2);
+            assertThat(primeiraExecucao.avisos()).isEmpty();
+
+            // Segunda 23/11
+            assertThat(primeiraExecucao.intervalosLivres())
+                    .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 23)))
+                    .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 23), LocalTime.of(7, 0), LocalTime.of(8, 30), Duration.ofMinutes(90)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 23), LocalTime.of(11, 30), LocalTime.of(12, 0), Duration.ofMinutes(30)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 23), LocalTime.of(13, 0), LocalTime.of(15, 30), Duration.ofMinutes(150)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 23), LocalTime.of(17, 45), LocalTime.of(18, 0), Duration.ofMinutes(15)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 23), LocalTime.of(19, 30), LocalTime.of(23, 0), Duration.ofMinutes(210)));
+
+            // Quarta 25/11: confirma que PLANTAO 15:00–17:00 continua ocupado e bloco manual não vira livre
+            assertThat(primeiraExecucao.intervalosLivres())
+                    .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 25)))
+                    .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 25), LocalTime.of(7, 0), LocalTime.of(8, 0), Duration.ofHours(1)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 25), LocalTime.of(9, 15), LocalTime.of(10, 30), Duration.ofMinutes(75)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 25), LocalTime.of(13, 30), LocalTime.of(15, 0), Duration.ofMinutes(90)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 25), LocalTime.of(17, 0), LocalTime.of(23, 0), Duration.ofHours(6)));
+
+            // Sexta 27/11: bloco manual 10:00–11:30 não divide a janela livre 07:00–12:00
+            assertThat(primeiraExecucao.intervalosLivres())
+                    .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 27)))
+                    .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 27), LocalTime.of(7, 0), LocalTime.of(12, 0), Duration.ofHours(5)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 27), LocalTime.of(13, 0), LocalTime.of(14, 30), Duration.ofMinutes(90)),
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 27), LocalTime.of(16, 45), LocalTime.of(23, 0), Duration.ofMinutes(375)));
+
+            // Domingo 29/11: dia inteiro livre
+            assertThat(primeiraExecucao.intervalosLivres())
+                    .filteredOn(i -> i.data().equals(LocalDate.of(2026, 11, 29)))
+                    .extracting(IntervaloLivre::data, IntervaloLivre::inicio, IntervaloLivre::fim, IntervaloLivre::duracao)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple(
+                                    LocalDate.of(2026, 11, 29), LocalTime.of(7, 0), LocalTime.of(23, 0), Duration.ofHours(16)));
+
+            assertThatThrownBy(() -> primeiraExecucao.intervalosLivres().clear())
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> primeiraExecucao.avisos().add("novo"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    @Test
+    void intervaloLivreEAgendaIntervalosLivresDevemValidarInvariantesEImutabilidade() {
+        LocalDate data = LocalDate.of(2026, 11, 23);
+        assertThatNullPointerException()
+                .isThrownBy(() -> new IntervaloLivre(null, LocalTime.of(9, 0), LocalTime.of(10, 0)));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new IntervaloLivre(data, null, LocalTime.of(10, 0)));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new IntervaloLivre(data, LocalTime.of(9, 0), null));
+        assertThatThrownBy(() -> new IntervaloLivre(data, LocalTime.of(9, 0), LocalTime.of(9, 0)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new IntervaloLivre(data, LocalTime.of(10, 0), LocalTime.of(9, 0)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        IntervaloLivre livre = new IntervaloLivre(data, LocalTime.of(8, 30), LocalTime.of(10, 0));
+        assertThat(livre.duracao()).isEqualTo(Duration.ofMinutes(90));
+
+        AgendaConfiguracao config = new AgendaConfiguracao(
+                JORNADA_PADRAO, new Margens(0, Map.of()), CLASSIFICACAO_PADRAO, List.of(), List.of());
+        assertThatNullPointerException()
+                .isThrownBy(() -> new AgendaIntervalosLivres(null, config, List.of(), List.of()));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new AgendaIntervalosLivres(data, null, List.of(), List.of()));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new AgendaIntervalosLivres(data, config, null, List.of()));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new AgendaIntervalosLivres(data, config, List.of(), null));
+
+        List<IntervaloLivre> livresMutaveis = new ArrayList<>();
+        List<String> avisosMutaveis = new ArrayList<>();
+        AgendaIntervalosLivres container = new AgendaIntervalosLivres(data, config, livresMutaveis, avisosMutaveis);
+        livresMutaveis.add(livre);
+        avisosMutaveis.add("aviso");
+        assertThat(container.intervalosLivres()).isEmpty();
+        assertThat(container.avisos()).isEmpty();
+        assertThatThrownBy(() -> container.intervalosLivres().add(livre))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> container.avisos().add("novo"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
     private static AgendaService criarService(
             Margens margens, List<Compromisso> compromissos, Clock clock) {
+        return criarService(JORNADA_PADRAO, margens, compromissos, clock);
+    }
+
+    private static AgendaService criarService(
+            Jornada jornada, Margens margens, List<Compromisso> compromissos, Clock clock) {
         AgendaConfiguracao config = new AgendaConfiguracao(
-                JORNADA_PADRAO, margens, CLASSIFICACAO_PADRAO, compromissos, List.of());
+                jornada, margens, CLASSIFICACAO_PADRAO, compromissos, List.of());
         AgendaRepository repoEmMemoria = caminho -> config;
         return new AgendaService(repoEmMemoria, clock);
     }

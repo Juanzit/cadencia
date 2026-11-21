@@ -23,9 +23,11 @@ cadencia/
     │   ├── agenda/               # módulo de agenda e blocos livres
     │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML
     │   │   ├── AgendaExpandida.java      # saída semanal imutável (ocupações, configuração e avisos)
+    │   │   ├── AgendaIntervalosLivres.java # saída semanal imutável de janelas livres da jornada
     │   │   ├── AgendaRepository.java     # porta (retorna AgendaConfiguracao)
-    │   │   ├── AgendaService.java        # expansão semanal, margens por empresa e deslocamentos automáticos (2.3; blocos livres na 2.4+)
+    │   │   ├── AgendaService.java        # expansão semanal, margens, deslocamentos (2.3) e intervalos livres (2.4; classificação na 2.5)
     │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
+    │   │   ├── IntervaloLivre.java       # janela livre diária [inicio, fim) com duracao() positiva
     │   │   ├── IntervaloOcupado.java     # fragmento diário ocupado [inicio, fim)
     │   │   ├── TipoIntervaloOcupado.java # COMPROMISSO, MARGEM_ANTES, MARGEM_DEPOIS, DESLOCAMENTO_AUTOMATICO
     │   │   └── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
@@ -76,7 +78,7 @@ cadencia/
 ## 2. Fluxo de Dados
 
 ```text
-agenda.yaml ──> AgendaRepository ──> AgendaService ──> AgendaExpandida (IntervaloOcupado + avisos) ──> [2.4+] blocos livres ─┐
+agenda.yaml ──> AgendaRepository ──> AgendaService ──> AgendaExpandida / AgendaIntervalosLivres ──> [2.5] classificação de blocos ─┐
 backlog.yaml ─> BacklogRepository ─> PlanejamentoService (AlocadorStrategy) <───────┤
 feedback/*.md ─> FeedbackRepository ─> ConfiabilidadeService ───────────────────────┤
 turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ──────────────────────────┤

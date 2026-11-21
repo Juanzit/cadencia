@@ -2,6 +2,7 @@ package dev.cadencia.agenda;
 
 import dev.cadencia.dominio.AgendaConfiguracao;
 import dev.cadencia.dominio.Compromisso;
+import dev.cadencia.dominio.Jornada;
 import dev.cadencia.dominio.MargemEmpresa;
 import dev.cadencia.dominio.TipoCompromisso;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,12 +24,14 @@ import java.util.Objects;
 
 /**
  * Serviço responsável por expandir os compromissos da agenda na semana ISO atual, aplicar margens
- * configuráveis por empresa e gerar deslocamentos automáticos entre locais distintos.
+ * configuráveis por empresa, gerar deslocamentos automáticos entre locais distintos e calcular os
+ * intervalos livres da jornada diária.
  */
 public class AgendaService {
 
     static final ZoneId FUSO_PADRAO = ZoneId.of("America/Sao_Paulo");
-    private static final long NANOS_POR_DIA = Duration.ofDays(1).toNanos();
+    private static final long NANOS_POR_DIA = 86_400_000_000_000L;
+    private static final int DIAS_DA_SEMANA = 7;
 
     private static final Comparator<Compromisso> ORDEM_COMPROMISSOS = Comparator
             .comparing(Compromisso::diaSemana)
@@ -44,6 +48,10 @@ public class AgendaService {
             .thenComparing(IntervaloOcupado::tipo)
             .thenComparing(IntervaloOcupado::duracao)
             .thenComparing(IntervaloOcupado::descricao);
+
+    private static final Comparator<FaixaNanos> ORDEM_FAIXAS = Comparator
+            .comparingLong(FaixaNanos::inicio)
+            .thenComparingLong(FaixaNanos::fim);
 
     private final AgendaRepository agendaRepository;
     private final Clock clock;
@@ -76,6 +84,122 @@ public class AgendaService {
 
         intervalos.sort(ORDEM_INTERVALOS);
         return new AgendaExpandida(inicioSemana, configuracao, intervalos, avisos);
+    }
+
+    /**
+     * Calcula os intervalos livres da semana ISO corrente (segunda a domingo) dentro da janela de
+     * jornada diária, reutilizando a expansão completa e mesclando ocupações sobrepostas ou adjacentes.
+     */
+    public AgendaIntervalosLivres calcularIntervalosLivres(Path caminhoAgenda) {
+        AgendaExpandida expandida = expandir(caminhoAgenda);
+        Map<LocalDate, List<IntervaloOcupado>> ocupadosPorData = agruparOcupadosPorData(expandida.intervalosOcupados());
+
+        LocalDate inicioSemana = expandida.inicioSemana();
+        Jornada jornada = expandida.configuracao().jornada();
+        List<IntervaloLivre> intervalosLivres = new ArrayList<>();
+
+        for (int diaOffset = 0; diaOffset < DIAS_DA_SEMANA; diaOffset++) {
+            LocalDate data = inicioSemana.plusDays(diaOffset);
+            List<IntervaloOcupado> ocupadosDoDia = ocupadosPorData.getOrDefault(data, List.of());
+            intervalosLivres.addAll(calcularIntervalosLivresDoDia(data, jornada, ocupadosDoDia));
+        }
+
+        return new AgendaIntervalosLivres(
+                inicioSemana,
+                expandida.configuracao(),
+                intervalosLivres,
+                expandida.avisos());
+    }
+
+    private static Map<LocalDate, List<IntervaloOcupado>> agruparOcupadosPorData(
+            List<IntervaloOcupado> intervalosOcupados) {
+        Map<LocalDate, List<IntervaloOcupado>> porData = new HashMap<>();
+        for (IntervaloOcupado intervalo : intervalosOcupados) {
+            porData.computeIfAbsent(intervalo.data(), ignored -> new ArrayList<>()).add(intervalo);
+        }
+        return porData;
+    }
+
+    private static List<IntervaloLivre> calcularIntervalosLivresDoDia(
+            LocalDate data, Jornada jornada, List<IntervaloOcupado> ocupadosDoDia) {
+        long inicioJanelaNanos = jornada.inicio().toNanoOfDay();
+        long fimJanelaNanos = jornada.fim().toNanoOfDay();
+
+        List<FaixaNanos> recortados = recortarOcupacoesNaJanela(ocupadosDoDia, inicioJanelaNanos, fimJanelaNanos);
+        if (recortados.isEmpty()) {
+            return List.of(new IntervaloLivre(data, jornada.inicio(), jornada.fim()));
+        }
+
+        recortados.sort(ORDEM_FAIXAS);
+        List<FaixaNanos> ocupacoesMescladas = mesclarSobreposicoesEAdjacencias(recortados);
+        return subtrairOcupacoesDaJanela(data, inicioJanelaNanos, fimJanelaNanos, ocupacoesMescladas);
+    }
+
+    private static List<FaixaNanos> recortarOcupacoesNaJanela(
+            List<IntervaloOcupado> ocupadosDoDia, long inicioJanelaNanos, long fimJanelaNanos) {
+        List<FaixaNanos> recortados = new ArrayList<>();
+        for (IntervaloOcupado ocupado : ocupadosDoDia) {
+            long inicioOcupadoNanos = ocupado.inicio().toNanoOfDay();
+            long fimOcupadoNanos = fimEmNanosNoDia(ocupado);
+
+            long inicioRecortado = Math.max(inicioOcupadoNanos, inicioJanelaNanos);
+            long fimRecortado = Math.min(fimOcupadoNanos, fimJanelaNanos);
+            if (inicioRecortado < fimRecortado) {
+                recortados.add(new FaixaNanos(inicioRecortado, fimRecortado));
+            }
+        }
+        return recortados;
+    }
+
+    private static List<FaixaNanos> mesclarSobreposicoesEAdjacencias(List<FaixaNanos> faixasOrdenadas) {
+        List<FaixaNanos> mesclados = new ArrayList<>();
+        long atualInicio = faixasOrdenadas.get(0).inicio();
+        long atualFim = faixasOrdenadas.get(0).fim();
+
+        for (int i = 1; i < faixasOrdenadas.size(); i++) {
+            FaixaNanos proxima = faixasOrdenadas.get(i);
+            if (proxima.inicio() <= atualFim) {
+                atualFim = Math.max(atualFim, proxima.fim());
+            } else {
+                mesclados.add(new FaixaNanos(atualInicio, atualFim));
+                atualInicio = proxima.inicio();
+                atualFim = proxima.fim();
+            }
+        }
+        mesclados.add(new FaixaNanos(atualInicio, atualFim));
+        return mesclados;
+    }
+
+    private static List<IntervaloLivre> subtrairOcupacoesDaJanela(
+            LocalDate data, long inicioJanelaNanos, long fimJanelaNanos, List<FaixaNanos> ocupacoesMescladas) {
+        List<IntervaloLivre> livres = new ArrayList<>();
+        long cursorNanos = inicioJanelaNanos;
+
+        for (FaixaNanos ocupacao : ocupacoesMescladas) {
+            if (ocupacao.inicio() > cursorNanos) {
+                livres.add(new IntervaloLivre(
+                        data,
+                        LocalTime.ofNanoOfDay(cursorNanos),
+                        LocalTime.ofNanoOfDay(ocupacao.inicio())));
+            }
+            cursorNanos = Math.max(cursorNanos, ocupacao.fim());
+        }
+
+        if (cursorNanos < fimJanelaNanos) {
+            livres.add(new IntervaloLivre(
+                    data,
+                    LocalTime.ofNanoOfDay(cursorNanos),
+                    LocalTime.ofNanoOfDay(fimJanelaNanos)));
+        }
+        return livres;
+    }
+
+    private static long fimEmNanosNoDia(IntervaloOcupado ocupado) {
+        // IntervaloOcupado garante termino <= 24h; somar inicio + duracao preserva 00:00 como 24h em nanos.
+        return Math.min(ocupado.inicio().toNanoOfDay() + ocupado.duracao().toNanos(), NANOS_POR_DIA);
+    }
+
+    private record FaixaNanos(long inicio, long fim) {
     }
 
     private static Map<DayOfWeek, List<Compromisso>> agruparPorDiaOrdenado(
