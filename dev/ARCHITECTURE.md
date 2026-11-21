@@ -21,10 +21,11 @@ cadencia/
     ├── main/java/dev/cadencia/
     │   ├── cli/                  # CONTROLLER: comandos Picocli
     │   ├── agenda/               # módulo de agenda e blocos livres
-    │   │   ├── AgendaDto.java            # DTO + validação do YAML
-    │   │   ├── AgendaRepository.java     # porta
-    │   │   ├── YamlAgendaRepository.java # adapter
-    │   │   └── AgendaService.java        # margens, intervalos livres, classificação
+    │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML
+    │   │   ├── AgendaRepository.java     # porta (retorna AgendaConfiguracao)
+    │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
+    │   │   ├── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
+    │   │   └── AgendaService.java        # margens, intervalos livres, classificação (Tarefa 2.3+)
     │   ├── planejamento/         # módulo de alocação de estudos
     │   │   ├── BacklogDto.java
     │   │   ├── BacklogRepository.java
@@ -51,12 +52,19 @@ cadencia/
     │   │       ├── ExportadorStrategy.java
     │   │       └── MarkdownSemanalExportador.java
     │   └── dominio/              # DOMAIN: records e regras puras (sem Spring)
-    │       ├── Compromisso.java
+    │       ├── AgendaConfiguracao.java
     │       ├── Bloco.java
-    │       ├── TipoBloco.java
+    │       ├── BlocoManual.java
+    │       ├── Classificacao.java
+    │       ├── Compromisso.java
+    │       ├── Jornada.java
+    │       ├── MargemEmpresa.java
+    │       ├── Margens.java
+    │       ├── Semana.java
     │       ├── Tarefa.java
-    │       ├── Turma.java
-    │       └── Semana.java
+    │       ├── TipoBloco.java
+    │       ├── TipoCompromisso.java
+    │       └── Turma.java
     └── test/java/dev/cadencia/   # espelha a estrutura de main + ArquiteturaTest (ArchUnit)
 ```
 
@@ -76,8 +84,9 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 
 ## 3. Modelagem de Domínio
 
-* `Compromisso`: dia da semana, início, fim, tipo (`AULA`, `REUNIAO`, `ALMOCO`, `DESLOCAMENTO`, `TREINO`, `PLANTAO`), empresa e título opcionais.
-* `Bloco`: data, início, fim, `TipoBloco` (`PROFUNDO`, `INTERROMPIVEL`, `VIGILANCIA`).
+* `Compromisso`: `diaSemana`, `inicio`, `duracao` (`fim()` derivado), `TipoCompromisso` (`AULA`, `REUNIAO`, `ALMOCO`, `DESLOCAMENTO`, `TREINO`, `PLANTAO`), `empresa`, `local` e `titulo` opcionais (ADR-010).
+* `Bloco`: data, início, fim, `TipoBloco` (`PROFUNDO`, `INTERROMPIVEL`, `VIGILANCIA`), `descricao` opcional.
+* `AgendaConfiguracao`: configuração completa imutável da agenda (`Jornada`, `Margens` com `MargemEmpresa` por empresa, `Classificacao`, lista de `Compromisso` e lista de `BlocoManual`).
 * `Tarefa`: id, título, duração total, tipos aceitos, tamanho do pedaço, prioridade.
 * `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas.
 * `Semana`: ano, número ISO, lista de compromissos e blocos.
