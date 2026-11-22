@@ -44,7 +44,7 @@ cadencia/
     │   │   ├── PedacoAlocado.java     # alocação de um Pedaco (blocoOrigem, data, inicio, fim, pedaco) (1.3)
     │   │   ├── ResultadoAlocacao.java # saída imutável (alocados e naoAlocados) (1.3)
     │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos) (1.1)
-    │   │   ├── PlanejamentoService.java
+    │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual e folga mínima configurável (1.4–1.5)
     │   │   └── strategies/
     │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação (1.3)
     │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3)
