@@ -19,8 +19,13 @@ import dev.cadencia.dominio.Jornada;
 import dev.cadencia.dominio.MargemEmpresa;
 import dev.cadencia.dominio.Margens;
 import dev.cadencia.dominio.Semana;
+import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.dominio.TipoBloco;
 import dev.cadencia.dominio.TipoCompromisso;
+import dev.cadencia.planejamento.PedacoAlocado;
+import dev.cadencia.planejamento.PlanejamentoService;
+import dev.cadencia.planejamento.ResultadoAlocacao;
+import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.io.IOException;
@@ -293,5 +298,124 @@ class MarkdownSemanalExportadorTest {
                 .contains("- [ ] seg 08:00–10:00 · Nota | linha 1 linha 2")
                 .contains("- [ ] seg 14:00–15:00 · Bloco interrompível (1h00)")
                 .contains("- Aviso linha 1 linha 2");
+    }
+
+    @Test
+    void deveExportarAgendaExemploComEstudosAlocadosTabelaEChecklistIdempotentes() throws IOException {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            AgendaRepository yamlRepo = new YamlAgendaRepository(
+                    new ObjectMapper(new YAMLFactory()),
+                    factory.getValidator());
+            AgendaService agendaService = new AgendaService(yamlRepo, RELOGIO_SEGUNDA_W48);
+            SemanaPlanejada semanaPlanejada = agendaService.gerarSemana(Path.of("exemplos/agenda.exemplo.yaml"));
+
+            List<Tarefa> tarefas = List.of(
+                    new Tarefa(
+                            "java-collections",
+                            "Java Collections",
+                            Duration.ofMinutes(150),
+                            List.of(TipoBloco.PROFUNDO),
+                            1),
+                    new Tarefa(
+                            "flashcards-java",
+                            "Flashcards Java",
+                            Duration.ofMinutes(50),
+                            List.of(TipoBloco.INTERROMPIVEL, TipoBloco.VIGILANCIA),
+                            2));
+
+            PlanejamentoService planejamentoService = new PlanejamentoService(new PrioridadeAlocadorStrategy());
+            ResultadoAlocacao resultado = planejamentoService.alocar(semanaPlanejada, tarefas);
+
+            String primeira = exportador.exportar(semanaPlanejada, resultado);
+            String segunda = exportador.exportar(semanaPlanejada, resultado);
+
+            assertThat(primeira).isEqualTo(segunda);
+            assertThat(primeira).doesNotContain("\r").endsWith("\n").doesNotEndWith("\n\n");
+            assertThat(primeira).contains(
+                    "- Blocos livres: 24 (profundo: 18 · interrompível: 5 · vigilância: 1)",
+                    "- Tempo livre total: 85h15",
+                    "- Estudos alocados: 8 pedaço(s) (3h20) · não alocados: 0 pedaço(s)",
+                    "- Turmas em transição: nenhuma");
+            assertThat(primeira).contains("""
+                    ## Segunda-feira, 23/11
+                    | Horário | Tipo | Detalhe |
+                    | :--- | :--- | :--- |
+                    | 07:00–07:25 | **Bloco profundo** | Java Collections (1/6) |
+                    | 07:25–07:50 | **Bloco profundo** | Java Collections (2/6) |
+                    | 07:50–08:15 | **Bloco profundo** | Java Collections (3/6) |
+                    | 08:30–09:00 | Margem | Margem antes (EmpresaA) |
+                    | 09:00–11:00 | Aula | EmpresaA · UNIDADE_CENTRO · Turma T01 |
+                    | 11:00–11:30 | Deslocamento | TRANSITO · Retorno para casa |
+                    | 11:30–12:00 | Bloco interrompível | Disponível (0h30) |
+                    | 12:00–13:00 | Almoço | CASA · Almoço |
+                    | 13:10–13:35 | **Bloco profundo** | Java Collections (4/6) |
+                    | 13:35–14:00 | **Bloco profundo** | Java Collections (5/6) |
+                    | 14:00–14:25 | **Bloco profundo** | Java Collections (6/6) |
+                    | 14:25–15:20 | **Bloco profundo** | Disponível (0h55) |
+                    """);
+            assertThat(primeira).contains(
+                    "| 07:00–07:25 | Bloco interrompível | Flashcards Java (1/2) |",
+                    "| 07:25–07:50 | Bloco interrompível | Flashcards Java (2/2) |",
+                    "| 07:00–23:00 | **Bloco profundo** | Disponível (16h00) |");
+            assertThat(primeira).contains("""
+                    ## Checklist de estudos
+                    - [ ] seg 07:00–07:25 · Java Collections (1/6)
+                    - [ ] seg 07:25–07:50 · Java Collections (2/6)
+                    - [ ] seg 07:50–08:15 · Java Collections (3/6)
+                    - [ ] seg 13:10–13:35 · Java Collections (4/6)
+                    - [ ] seg 13:35–14:00 · Java Collections (5/6)
+                    - [ ] seg 14:00–14:25 · Java Collections (6/6)
+                    - [ ] qua 07:00–07:25 · Flashcards Java (1/2)
+                    - [ ] qua 07:25–07:50 · Flashcards Java (2/2)
+
+                    ## Avisos
+                    - Nenhum aviso.
+                    """);
+        }
+    }
+
+    @Test
+    void deveExibirAvisosDePedacosNaoAlocadosESanitizarTitulosDeEstudos() {
+        LocalDate segunda = LocalDate.of(2026, 11, 23);
+        Bloco profundo = new Bloco(segunda, LocalTime.of(8, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, null);
+        SemanaPlanejada semana = new SemanaPlanejada(
+                segunda, new Semana(2026, 48, List.of(), List.of(profundo)), List.of());
+
+        assertThatNullPointerException().isThrownBy(() -> exportador.exportar(semana, null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> exportador.exportar(null, new ResultadoAlocacao(List.of(), List.of())));
+
+        Tarefa tarefaIncompativel = new Tarefa(
+                "t-vig",
+                "Leitura | Leve\nParte 1",
+                Duration.ofMinutes(50),
+                List.of(TipoBloco.VIGILANCIA),
+                1);
+        ResultadoAlocacao nadaAlocado = new ResultadoAlocacao(List.of(), tarefaIncompativel.dividirEmPedacos());
+        String mdSemAlocacao = exportador.exportar(semana, nadaAlocado);
+        assertThat(mdSemAlocacao).contains(
+                "- Estudos alocados: 0 pedaço(s) (0h00) · não alocados: 2 pedaço(s)",
+                "| 08:00–09:00 | **Bloco profundo** | Disponível (1h00) |",
+                "- Nenhum estudo alocado na semana.",
+                "Não foi possível alocar todos os pedaços de \"Leitura | Leve Parte 1\" (1/2, 2/2)");
+
+        Tarefa tarefaComPipe = new Tarefa(
+                "t-pipe",
+                "Java | Streams\nAvançado",
+                Duration.ofMinutes(25),
+                List.of(TipoBloco.PROFUNDO),
+                1);
+        PedacoAlocado alocado = new PedacoAlocado(
+                profundo,
+                segunda,
+                LocalTime.of(8, 0),
+                LocalTime.of(8, 25),
+                tarefaComPipe.dividirEmPedacos().get(0));
+        String mdSanitizada = exportador.exportar(
+                semana, new ResultadoAlocacao(List.of(alocado), List.of()));
+        assertThat(mdSanitizada).contains(
+                "| 08:00–08:25 | **Bloco profundo** | Java \\| Streams Avançado (1/1) |",
+                "| 08:25–09:00 | **Bloco profundo** | Disponível (0h35) |",
+                "- [ ] seg 08:00–08:25 · Java | Streams Avançado (1/1)");
     }
 }

@@ -8,8 +8,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import dev.cadencia.agenda.AgendaRepository;
 import dev.cadencia.agenda.AgendaService;
+import dev.cadencia.agenda.DadosInvalidosException;
 import dev.cadencia.agenda.YamlAgendaRepository;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.planejamento.BacklogRepository;
+import dev.cadencia.planejamento.PlanejamentoService;
+import dev.cadencia.planejamento.YamlBacklogRepository;
+import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.io.IOException;
@@ -21,6 +26,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PlanoSemanalServiceTest {
 
@@ -116,6 +122,91 @@ class PlanoSemanalServiceTest {
                     .isThrownBy(() -> new PlanoSemanalService(agendaService, exportador, repo, null));
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> new PlanoSemanalService(agendaService, exportador, repo, Path.of("   ")));
+            assertThatThrownBy(() -> new PlanoSemanalService(agendaService, exportador, repo, tempDir)
+                            .gerarEExportar(Path.of("exemplos/agenda.exemplo.yaml"), tempDir.resolve("backlog.yaml"), null))
+                    .isInstanceOf(IllegalStateException.class);
+
+            BacklogRepository backlogRepo = new YamlBacklogRepository(
+                    new ObjectMapper(new YAMLFactory()), factory.getValidator());
+            PlanejamentoService planejamento = new PlanejamentoService(new PrioridadeAlocadorStrategy());
+
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(null, backlogRepo, planejamento, exportador, repo, tempDir));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(agendaService, null, planejamento, exportador, repo, tempDir));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(agendaService, backlogRepo, null, exportador, repo, tempDir));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(agendaService, backlogRepo, planejamento, null, repo, tempDir));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(agendaService, backlogRepo, planejamento, exportador, null, tempDir));
+            assertThatNullPointerException()
+                    .isThrownBy(() -> new PlanoSemanalService(agendaService, backlogRepo, planejamento, exportador, repo, null));
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> new PlanoSemanalService(
+                            agendaService, backlogRepo, planejamento, exportador, repo, Path.of("  ")));
+        }
+    }
+
+    @Test
+    void deveDetectarBacklogPadraoQuandoPresenteEPermitirSobrescritaComBacklogExplicito()
+            throws IOException {
+        Path dadosTemp = tempDir.resolve("dados-backlog");
+        Files.createDirectories(dadosTemp);
+        Files.copy(Path.of("exemplos/agenda.exemplo.yaml"), dadosTemp.resolve("agenda.yaml"));
+
+        Path backlogPadrao = dadosTemp.resolve("backlog.yaml");
+        Files.writeString(backlogPadrao, """
+                tarefas:
+                  - id: "collections"
+                    titulo: "Java Collections"
+                    duracao_total_min: 50
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        Path backlogAlternativo = tempDir.resolve("backlog-alt.yaml");
+        Files.writeString(backlogAlternativo, """
+                tarefas:
+                  - id: "spring"
+                    titulo: "Spring Boot"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+            AgendaService agendaService = new AgendaService(
+                    new YamlAgendaRepository(yamlMapper, factory.getValidator()), RELOGIO_W48);
+            BacklogRepository backlogRepo = new YamlBacklogRepository(yamlMapper, factory.getValidator());
+            PlanejamentoService planejamento = new PlanejamentoService(new PrioridadeAlocadorStrategy());
+
+            PlanoSemanalService service = new PlanoSemanalService(
+                    agendaService,
+                    backlogRepo,
+                    planejamento,
+                    new MarkdownSemanalExportador(),
+                    new MarkdownPlanoSemanalRepository(),
+                    dadosTemp);
+
+            PlanoSemanalGerado comPadrao = service.gerarEExportar(null, null);
+            assertThat(comPadrao.resultadoAlocacao()).isNotNull();
+            assertThat(comPadrao.resultadoAlocacao().alocados()).hasSize(2);
+            assertThat(Files.readString(comPadrao.arquivoSaida(), StandardCharsets.UTF_8))
+                    .contains("| 07:00–07:25 | **Bloco profundo** | Java Collections (1/2) |")
+                    .contains("- [ ] seg 07:25–07:50 · Java Collections (2/2)");
+
+            PlanoSemanalGerado comExplicito = service.gerarEExportar(null, backlogAlternativo, null);
+            assertThat(comExplicito.resultadoAlocacao()).isNotNull();
+            assertThat(comExplicito.resultadoAlocacao().alocados()).hasSize(1);
+            assertThat(Files.readString(comExplicito.arquivoSaida(), StandardCharsets.UTF_8))
+                    .contains("| 07:00–07:25 | **Bloco profundo** | Spring Boot (1/1) |")
+                    .doesNotContain("Java Collections");
+
+            Path backlogInexistente = tempDir.resolve("nao-existe.yaml");
+            assertThatThrownBy(() -> service.gerarEExportar(null, backlogInexistente, null))
+                    .isInstanceOf(DadosInvalidosException.class);
         }
     }
 }

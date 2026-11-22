@@ -271,5 +271,30 @@ class YamlBacklogRepositoryTest {
         assertThatNullPointerException().isThrownBy(() -> new YamlBacklogRepository(null, validator));
         assertThatNullPointerException().isThrownBy(() -> new YamlBacklogRepository(yamlMapper, null));
         assertThatNullPointerException().isThrownBy(() -> repository.carregar(null));
+        assertThatNullPointerException().isThrownBy(() -> repository.carregarSeExistir(null));
+    }
+
+    @Test
+    void deveRetornarVazioQuandoArquivoOpcionalNaoExistirECarregarQuandoPresente() throws IOException {
+        Path inexistente = tempDir.resolve("nao-existe.yaml");
+        assertThat(repository.carregarSeExistir(inexistente)).isEmpty();
+
+        Path existente = tempDir.resolve("backlog-opcional.yaml");
+        Files.writeString(existente, """
+                tarefas:
+                  - id: "java-core"
+                    titulo: "Java Core"
+                    duracao_total_min: 50
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        assertThat(repository.carregarSeExistir(existente))
+                .isPresent()
+                .get()
+                .satisfies(lista -> {
+                    assertThat(lista).hasSize(1);
+                    assertThat(lista.get(0).id()).isEqualTo("java-core");
+                });
     }
 }

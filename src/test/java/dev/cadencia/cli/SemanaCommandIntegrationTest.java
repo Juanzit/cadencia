@@ -233,6 +233,65 @@ class SemanaCommandIntegrationTest {
                 "semana", "--opcao-desconhecida");
         assertThat(codParametro).isEqualTo(2);
         assertThat(errParametro.toString()).contains("Argumentos inválidos").doesNotContain("at dev.cadencia.");
+
+        StringWriter errBacklogVazio = new StringWriter();
+        int codBacklogVazio = runner.executar(
+                new PrintWriter(new StringWriter()),
+                new PrintWriter(errBacklogVazio),
+                "semana", "--backlog", "   ");
+        assertThat(codBacklogVazio).isEqualTo(2);
+        assertThat(errBacklogVazio.toString()).contains("--backlog").doesNotContain("at dev.cadencia.");
+
+        StringWriter errBacklogInex = new StringWriter();
+        int codBacklogInex = runner.executar(
+                new PrintWriter(new StringWriter()),
+                new PrintWriter(errBacklogInex),
+                "semana",
+                "--agenda", "exemplos/agenda.exemplo.yaml",
+                "--backlog", diretorioDadosTemporario.resolve("backlog-ausente.yaml").toString());
+        assertThat(codBacklogInex).isEqualTo(2);
+        assertThat(errBacklogInex.toString()).contains("backlog-ausente.yaml").doesNotContain("at dev.cadencia.");
+    }
+
+    @Test
+    void deveGerarPlanoComEstudosAlocadosQuandoOpcaoBacklogForInformada() throws IOException {
+        Path backlogExplicito = Files.createTempFile(diretorioDadosTemporario, "backlog-", ".yaml");
+        Files.writeString(backlogExplicito, """
+                tarefas:
+                  - id: "collections"
+                    titulo: "Java Collections"
+                    duracao_total_min: 150
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "impossivel"
+                    titulo: "Tarefa Gigante"
+                    duracao_total_min: 50000
+                    tipos_aceitos: [VIGILANCIA]
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        int codigo = runner.executar(
+                new PrintWriter(out),
+                new PrintWriter(err),
+                "semana",
+                "--agenda", "exemplos/agenda.exemplo.yaml",
+                "--backlog", backlogExplicito.toString(),
+                "--data", "2026-11-23");
+
+        assertThat(codigo).isZero();
+        assertThat(err.toString()).isEmpty();
+        assertThat(out.toString())
+                .contains("2026-W48", "24 blocos livres", "pedaço(s) alocado(s)")
+                .contains("não couberam nesta semana");
+
+        Path destino = diretorioDadosTemporario.resolve("semana/2026-W48.md");
+        String markdown = Files.readString(destino, StandardCharsets.UTF_8);
+        assertThat(markdown)
+                .contains("| 07:00–07:25 | **Bloco profundo** | Java Collections (1/6) |")
+                .contains("- [ ] seg 07:00–07:25 · Java Collections (1/6)")
+                .contains("Tarefa Gigante");
     }
 
     @Test

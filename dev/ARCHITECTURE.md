@@ -20,12 +20,12 @@ cadencia/
 └── src/
     ├── main/java/dev/cadencia/
     │   ├── CadenciaApplication.java  # ponto de entrada Spring Boot (SpringApplication.exit + System.exit)
-    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e cadencia.diretorio-dados
+    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços (incl. planejamento) e propriedades cadencia.*
     │   ├── cli/                  # CONTROLLER: comandos Picocli + integração Spring Boot
     │   │   ├── CadenciaCommand.java       # comando raiz sem efeitos colaterais em inicialização sem subcomando
     │   │   ├── PicocliCommandRunner.java  # CommandLineRunner + ExitCodeGenerator (exit codes 0/1/2 e --verbose)
     │   │   ├── PicocliSpringFactory.java  # CommandLine.IFactory integrado ao ApplicationContext
-    │   │   └── SemanaCommand.java         # subcomando semana [--data AAAA-MM-DD] [--agenda caminho]
+    │   │   └── SemanaCommand.java         # subcomando semana [--data AAAA-MM-DD] [--agenda caminho] [--backlog caminho] (1.6)
     │   ├── agenda/               # módulo de agenda e blocos livres
     │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML (incluindo blocos manuais sem sobreposição)
     │   │   ├── AgendaExpandida.java      # saída semanal imutável (ocupações, configuração e avisos)
@@ -64,12 +64,12 @@ cadencia/
     │   │   └── RoteiroService.java
     │   ├── exportacao/           # saída Markdown e persistência do plano semanal
     │   │   ├── MarkdownPlanoSemanalRepository.java # adapter de gravação UTF-8 + LF criando diretórios pais
-    │   │   ├── PlanoSemanalGerado.java             # resultado imutável (arquivoSaida + SemanaPlanejada)
+    │   │   ├── PlanoSemanalGerado.java             # resultado imutável (arquivoSaida + SemanaPlanejada + ResultadoAlocacao opcional)
     │   │   ├── PlanoSemanalRepository.java         # porta de persistência do plano semanal
-    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, ExportadorStrategy e PlanoSemanalRepository (3.2)
+    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, BacklogRepository, PlanejamentoService, ExportadorStrategy e PlanoSemanalRepository (3.2, 1.6)
     │   │   └── strategies/
-    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação
-    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal (3.1)
+    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação (com e sem ResultadoAlocacao)
+    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal com pedaços alocados (3.1, 1.6)
     │   └── dominio/              # DOMAIN: records e regras puras (sem Spring)
     │       ├── AgendaConfiguracao.java
     │       ├── Bloco.java

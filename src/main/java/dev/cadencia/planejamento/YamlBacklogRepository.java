@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -38,6 +39,15 @@ public class YamlBacklogRepository implements BacklogRepository {
         BacklogDto dto = lerDto(caminho);
         validarDto(caminho, dto);
         return dto.paraDominio();
+    }
+
+    @Override
+    public Optional<List<Tarefa>> carregarSeExistir(Path caminho) {
+        Objects.requireNonNull(caminho, "caminho não pode ser nulo");
+        if (!Files.exists(caminho)) {
+            return Optional.empty();
+        }
+        return Optional.of(carregar(caminho));
     }
 
     private BacklogDto lerDto(Path caminho) {

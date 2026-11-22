@@ -1,6 +1,7 @@
 package dev.cadencia.exportacao.strategies;
 
 import dev.cadencia.agenda.SemanaPlanejada;
+import dev.cadencia.planejamento.ResultadoAlocacao;
 
 /**
  * Contrato do padrão Strategy para exportação de semanas planejadas em diferentes formatos de
@@ -10,7 +11,13 @@ public interface ExportadorStrategy {
 
     /**
      * Serializa a semana planejada em uma representação textual determinística no formato desta
-     * estratégia.
+     * estratégia, sem alocação de backlog.
      */
     String exportar(SemanaPlanejada semanaPlanejada);
+
+    /**
+     * Serializa a semana planejada combinando ocupações, blocos livres e os pedaços alocados pelo
+     * planejamento determinístico de estudos.
+     */
+    String exportar(SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao);
 }

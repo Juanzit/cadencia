@@ -7,6 +7,9 @@ import dev.cadencia.cli.PicocliCommandRunner;
 import dev.cadencia.cli.PicocliSpringFactory;
 import dev.cadencia.cli.SemanaCommand;
 import dev.cadencia.exportacao.PlanoSemanalService;
+import dev.cadencia.planejamento.BacklogRepository;
+import dev.cadencia.planejamento.PlanejamentoService;
+import dev.cadencia.planejamento.strategies.AlocadorStrategy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,6 +75,9 @@ class CadenciaApplicationTest {
         assertThat(applicationContext.getBean(PicocliCommandRunner.class)).isNotNull();
         assertThat(applicationContext.getBean(CadenciaCommand.class)).isNotNull();
         assertThat(applicationContext.getBean(SemanaCommand.class)).isNotNull();
+        assertThat(applicationContext.getBean(BacklogRepository.class)).isNotNull();
+        assertThat(applicationContext.getBean(AlocadorStrategy.class)).isNotNull();
+        assertThat(applicationContext.getBean(PlanejamentoService.class)).isNotNull();
         assertThat(applicationContext.getBean(PlanoSemanalService.class)).isNotNull();
 
         try (Stream<Path> arquivosCriados = Files.walk(diretorioDadosTemporario)) {

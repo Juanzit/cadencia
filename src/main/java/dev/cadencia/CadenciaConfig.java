@@ -10,9 +10,15 @@ import dev.cadencia.exportacao.PlanoSemanalRepository;
 import dev.cadencia.exportacao.PlanoSemanalService;
 import dev.cadencia.exportacao.strategies.ExportadorStrategy;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.planejamento.BacklogRepository;
+import dev.cadencia.planejamento.PlanejamentoService;
+import dev.cadencia.planejamento.YamlBacklogRepository;
+import dev.cadencia.planejamento.strategies.AlocadorStrategy;
+import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
 import jakarta.validation.Validator;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -41,6 +47,23 @@ public class CadenciaConfig {
     }
 
     @Bean
+    BacklogRepository backlogRepository(Validator validator) {
+        return new YamlBacklogRepository(new ObjectMapper(new YAMLFactory()), validator);
+    }
+
+    @Bean
+    AlocadorStrategy alocadorStrategy() {
+        return new PrioridadeAlocadorStrategy();
+    }
+
+    @Bean
+    PlanejamentoService planejamentoService(
+            AlocadorStrategy alocadorStrategy,
+            @Value("${cadencia.folga-minima-min:10}") long folgaMinimaMin) {
+        return new PlanejamentoService(alocadorStrategy, Duration.ofMinutes(folgaMinimaMin));
+    }
+
+    @Bean
     ExportadorStrategy exportadorStrategy() {
         return new MarkdownSemanalExportador();
     }
@@ -53,10 +76,17 @@ public class CadenciaConfig {
     @Bean
     PlanoSemanalService planoSemanalService(
             AgendaService agendaService,
+            BacklogRepository backlogRepository,
+            PlanejamentoService planejamentoService,
             ExportadorStrategy exportadorStrategy,
             PlanoSemanalRepository planoSemanalRepository,
             @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados) {
         return new PlanoSemanalService(
-                agendaService, exportadorStrategy, planoSemanalRepository, diretorioDados);
+                agendaService,
+                backlogRepository,
+                planejamentoService,
+                exportadorStrategy,
+                planoSemanalRepository,
+                diretorioDados);
     }
 }

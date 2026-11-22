@@ -4,8 +4,12 @@ import dev.cadencia.agenda.IntervaloOcupado;
 import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.agenda.TipoIntervaloOcupado;
 import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.Pedaco;
 import dev.cadencia.dominio.Semana;
+import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.dominio.TipoBloco;
+import dev.cadencia.planejamento.PedacoAlocado;
+import dev.cadencia.planejamento.ResultadoAlocacao;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -14,14 +18,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Exporta uma {@link SemanaPlanejada} para Markdown padrão no formato especificado em
- * {@code dev/DESIGN.md}, garantindo saída determinística, idempotente e com quebras de linha LF.
+ * Exporta uma {@link SemanaPlanejada} (opcionalmente acompanhada de um {@link ResultadoAlocacao})
+ * para Markdown padrão no formato especificado em {@code dev/DESIGN.md}, garantindo saída
+ * determinística, idempotente e com quebras de linha LF.
  */
 public class MarkdownSemanalExportador implements ExportadorStrategy {
 
@@ -41,6 +47,11 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
             .thenComparing(Bloco::tipo)
             .thenComparing(Bloco::descricao, Comparator.nullsFirst(String::compareTo));
 
+    private static final Comparator<PedacoAlocado> ORDEM_ALOCADOS = Comparator
+            .comparing(PedacoAlocado::data)
+            .thenComparing(PedacoAlocado::inicio)
+            .thenComparing(PedacoAlocado::fim);
+
     private static final Comparator<LinhaDia> ORDEM_LINHAS_DIA = Comparator
             .comparingLong(LinhaDia::inicioNanos)
             .thenComparingLong(LinhaDia::fimNanos)
@@ -51,7 +62,18 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     @Override
     public String exportar(SemanaPlanejada semanaPlanejada) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
+        return exportarInterno(semanaPlanejada, null);
+    }
 
+    @Override
+    public String exportar(SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao) {
+        Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
+        Objects.requireNonNull(resultadoAlocacao, "resultadoAlocacao não pode ser nulo");
+        return exportarInterno(semanaPlanejada, resultadoAlocacao);
+    }
+
+    private static String exportarInterno(
+            SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao) {
         LocalDate inicioSemana = semanaPlanejada.inicioSemana();
         LocalDate fimSemana = inicioSemana.plusDays(DIAS_DA_SEMANA - 1L);
         Semana semana = semanaPlanejada.semana();
@@ -59,12 +81,17 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
         List<Bloco> blocosOrdenados = new ArrayList<>(semana.blocos());
         blocosOrdenados.sort(ORDEM_BLOCOS);
 
+        List<PedacoAlocado> alocadosOrdenados = resultadoAlocacao != null
+                ? resultadoAlocacao.alocados().stream().sorted(ORDEM_ALOCADOS).toList()
+                : List.of();
+
         StringBuilder md = new StringBuilder();
         escreverCabecalho(md, semana, inicioSemana, fimSemana);
-        escreverResumo(md, blocosOrdenados);
-        escreverDiasDaSemana(md, inicioSemana, semanaPlanejada.intervalosOcupados(), blocosOrdenados);
-        escreverChecklist(md, blocosOrdenados);
-        escreverAvisos(md, semanaPlanejada.avisos());
+        escreverResumo(md, blocosOrdenados, resultadoAlocacao);
+        escreverDiasDaSemana(
+                md, inicioSemana, semanaPlanejada.intervalosOcupados(), blocosOrdenados, alocadosOrdenados);
+        escreverChecklist(md, blocosOrdenados, alocadosOrdenados, resultadoAlocacao != null);
+        escreverAvisos(md, semanaPlanejada.avisos(), resultadoAlocacao);
         return md.toString();
     }
 
@@ -81,7 +108,8 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                 .append(LF);
     }
 
-    private static void escreverResumo(StringBuilder md, List<Bloco> blocosOrdenados) {
+    private static void escreverResumo(
+            StringBuilder md, List<Bloco> blocosOrdenados, ResultadoAlocacao resultadoAlocacao) {
         long profundos = 0;
         long interrompiveis = 0;
         long vigilancias = 0;
@@ -102,17 +130,33 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                         "- Blocos livres: %d (profundo: %d · interrompível: %d · vigilância: %d)",
                         blocosOrdenados.size(), profundos, interrompiveis, vigilancias))
                 .append(LF)
-                .append("- Tempo livre total: ").append(formatarDuracao(tempoTotal)).append(LF)
-                .append("- Turmas em transição: nenhuma").append(LF);
+                .append("- Tempo livre total: ").append(formatarDuracao(tempoTotal)).append(LF);
+
+        if (resultadoAlocacao != null) {
+            Duration tempoAlocado = resultadoAlocacao.alocados().stream()
+                    .map(alocado -> alocado.pedaco().duracao())
+                    .reduce(Duration.ZERO, Duration::plus);
+            md.append(String.format(
+                            Locale.ROOT,
+                            "- Estudos alocados: %d pedaço(s) (%s) · não alocados: %d pedaço(s)",
+                            resultadoAlocacao.alocados().size(),
+                            formatarDuracao(tempoAlocado),
+                            resultadoAlocacao.naoAlocados().size()))
+                    .append(LF);
+        }
+
+        md.append("- Turmas em transição: nenhuma").append(LF);
     }
 
     private static void escreverDiasDaSemana(
             StringBuilder md,
             LocalDate inicioSemana,
             List<IntervaloOcupado> intervalosOcupados,
-            List<Bloco> blocosOrdenados) {
+            List<Bloco> blocosOrdenados,
+            List<PedacoAlocado> alocadosOrdenados) {
 
-        Map<LocalDate, List<LinhaDia>> linhasPorDia = agruparLinhasPorDia(intervalosOcupados, blocosOrdenados);
+        Map<LocalDate, List<LinhaDia>> linhasPorDia = agruparLinhasPorDia(
+                intervalosOcupados, blocosOrdenados, alocadosOrdenados);
 
         for (int diaOffset = 0; diaOffset < DIAS_DA_SEMANA; diaOffset++) {
             LocalDate data = inicioSemana.plusDays(diaOffset);
@@ -145,21 +189,78 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     }
 
     private static Map<LocalDate, List<LinhaDia>> agruparLinhasPorDia(
-            List<IntervaloOcupado> intervalosOcupados, List<Bloco> blocosOrdenados) {
+            List<IntervaloOcupado> intervalosOcupados,
+            List<Bloco> blocosOrdenados,
+            List<PedacoAlocado> alocadosOrdenados) {
         Map<LocalDate, List<LinhaDia>> porDia = new HashMap<>();
 
         for (IntervaloOcupado ocupado : intervalosOcupados) {
             porDia.computeIfAbsent(ocupado.data(), ignored -> new ArrayList<>())
                     .add(linhaDeOcupacao(ocupado));
         }
-        for (Bloco bloco : blocosOrdenados) {
-            porDia.computeIfAbsent(bloco.data(), ignored -> new ArrayList<>())
-                    .add(linhaDeBloco(bloco));
+
+        for (PedacoAlocado alocado : alocadosOrdenados) {
+            porDia.computeIfAbsent(alocado.data(), ignored -> new ArrayList<>())
+                    .add(linhaDePedacoAlocado(alocado));
         }
+
+        for (Bloco bloco : blocosOrdenados) {
+            List<PedacoAlocado> alocadosNoBloco = filtrarAlocadosNoBloco(bloco, alocadosOrdenados);
+            if (alocadosNoBloco.isEmpty()) {
+                porDia.computeIfAbsent(bloco.data(), ignored -> new ArrayList<>())
+                        .add(linhaDeBloco(bloco));
+            } else {
+                adicionarBlocosResiduais(alocadosNoBloco, porDia);
+            }
+        }
+
         for (List<LinhaDia> linhas : porDia.values()) {
             linhas.sort(ORDEM_LINHAS_DIA);
         }
         return porDia;
+    }
+
+    private static List<PedacoAlocado> filtrarAlocadosNoBloco(
+            Bloco bloco, List<PedacoAlocado> alocadosOrdenados) {
+        if (alocadosOrdenados.isEmpty()) {
+            return List.of();
+        }
+        List<PedacoAlocado> correspondentes = new ArrayList<>();
+        for (PedacoAlocado alocado : alocadosOrdenados) {
+            if (alocado.data().equals(bloco.data())
+                    && !alocado.inicio().isBefore(bloco.inicio())
+                    && !alocado.fim().isAfter(bloco.fim())) {
+                correspondentes.add(alocado);
+            }
+        }
+        return correspondentes;
+    }
+
+    private static void adicionarBlocosResiduais(
+            List<PedacoAlocado> alocadosNoBloco, Map<LocalDate, List<LinhaDia>> porDia) {
+        Bloco base = alocadosNoBloco.get(0).blocoOrigem();
+        LocalTime cursor = base.inicio();
+
+        for (PedacoAlocado alocado : alocadosNoBloco) {
+            if (alocado.inicio().isAfter(cursor)) {
+                adicionarSeRelevante(base, cursor, alocado.inicio(), porDia);
+            }
+            if (alocado.fim().isAfter(cursor)) {
+                cursor = alocado.fim();
+            }
+        }
+        if (cursor.isBefore(base.fim())) {
+            adicionarSeRelevante(base, cursor, base.fim(), porDia);
+        }
+    }
+
+    private static void adicionarSeRelevante(
+            Bloco base, LocalTime inicio, LocalTime fim, Map<LocalDate, List<LinhaDia>> porDia) {
+        if (Duration.between(inicio, fim).compareTo(Tarefa.TAMANHO_PEDACO_PADRAO) < 0) {
+            return;
+        }
+        Bloco residual = new Bloco(base.data(), inicio, fim, base.tipo(), base.descricao());
+        porDia.computeIfAbsent(base.data(), ignored -> new ArrayList<>()).add(linhaDeBloco(residual));
     }
 
     private static LinhaDia linhaDeOcupacao(IntervaloOcupado ocupado) {
@@ -169,6 +270,16 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
         String tipo = formatarTipoOcupacao(ocupado);
         String detalhe = formatarDetalheOcupacao(ocupado);
         return new LinhaDia(inicioNanos, fimNanos, 0, horario, tipo, detalhe);
+    }
+
+    private static LinhaDia linhaDePedacoAlocado(PedacoAlocado alocado) {
+        return new LinhaDia(
+                alocado.inicio().toNanoOfDay(),
+                alocado.fim().toNanoOfDay(),
+                1,
+                formatarIntervalo(alocado.inicio(), alocado.fim()),
+                rotuloTabelaBloco(alocado.blocoOrigem().tipo()),
+                formatarTituloPedaco(alocado.pedaco()));
     }
 
     private static LinhaDia linhaDeBloco(Bloco bloco) {
@@ -182,8 +293,29 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
         return new LinhaDia(inicioNanos, fimNanos, 1, horario, tipo, detalhe);
     }
 
-    private static void escreverChecklist(StringBuilder md, List<Bloco> blocosOrdenados) {
+    private static void escreverChecklist(
+            StringBuilder md,
+            List<Bloco> blocosOrdenados,
+            List<PedacoAlocado> alocadosOrdenados,
+            boolean comPlanejamento) {
         md.append(LF).append("## Checklist de estudos").append(LF);
+        if (comPlanejamento) {
+            if (alocadosOrdenados.isEmpty()) {
+                md.append("- Nenhum estudo alocado na semana.").append(LF);
+                return;
+            }
+            for (PedacoAlocado alocado : alocadosOrdenados) {
+                md.append("- [ ] ")
+                        .append(abreviacaoDia(alocado.data().getDayOfWeek()))
+                        .append(' ')
+                        .append(formatarIntervalo(alocado.inicio(), alocado.fim()))
+                        .append(" · ")
+                        .append(sanitizarLinha(formatarTituloPedaco(alocado.pedaco())))
+                        .append(LF);
+            }
+            return;
+        }
+
         if (blocosOrdenados.isEmpty()) {
             md.append("- Nenhum bloco livre disponível na semana.").append(LF);
             return;
@@ -203,15 +335,35 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
         }
     }
 
-    private static void escreverAvisos(StringBuilder md, List<String> avisos) {
+    private static void escreverAvisos(
+            StringBuilder md, List<String> avisosSemana, ResultadoAlocacao resultadoAlocacao) {
+        List<String> todosAvisos = new ArrayList<>(avisosSemana);
+        if (resultadoAlocacao != null && !resultadoAlocacao.naoAlocados().isEmpty()) {
+            Map<String, List<String>> porTarefa = new LinkedHashMap<>();
+            for (Pedaco pedaco : resultadoAlocacao.naoAlocados()) {
+                porTarefa.computeIfAbsent(pedaco.tarefa().titulo(), ignored -> new ArrayList<>())
+                        .add(pedaco.numero() + "/" + pedaco.total());
+            }
+            for (Map.Entry<String, List<String>> entry : porTarefa.entrySet()) {
+                todosAvisos.add(String.format(
+                        "Não foi possível alocar todos os pedaços de \"%s\" (%s) por falta de blocos compatíveis ou tempo disponível.",
+                        entry.getKey(),
+                        String.join(", ", entry.getValue())));
+            }
+        }
+
         md.append(LF).append("## Avisos").append(LF);
-        if (avisos.isEmpty()) {
+        if (todosAvisos.isEmpty()) {
             md.append("- Nenhum aviso.").append(LF);
             return;
         }
-        for (String aviso : avisos) {
+        for (String aviso : todosAvisos) {
             md.append("- ").append(sanitizarLinha(aviso)).append(LF);
         }
+    }
+
+    private static String formatarTituloPedaco(Pedaco pedaco) {
+        return pedaco.tarefa().titulo().trim() + " (" + pedaco.numero() + "/" + pedaco.total() + ")";
     }
 
     private static String formatarIntervalo(LocalTime inicio, LocalTime fim) {
