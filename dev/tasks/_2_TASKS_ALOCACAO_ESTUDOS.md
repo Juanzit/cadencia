@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 2 (25%)
+* **Concluídas:** 3 (38%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 6 (75%)
+* **Pendentes:** 5 (63%)
 
 ---
 
@@ -24,7 +24,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | 1.1 | Implementar `BacklogDto`, `BacklogRepository` e `YamlBacklogRepository` lendo `backlog.yaml` (id, título, duração total, tipos aceitos, pedaço em minutos, prioridade) com validação | Repository / DTO | Crítica | 🟢 Concluído |
 | 1.2 | Implementar `Tarefa` e `Pedaco` no domínio (duração total dividida em pedaços de 25 min por padrão, último pedaço pode ser menor) | Domain | Crítica | 🟢 Concluído |
-| 1.3 | Definir a interface `AlocadorStrategy` e implementar `PrioridadeAlocadorStrategy` (menor número de prioridade primeiro, mantendo a ordem do roadmap) | Strategy | Crítica | 🔴 Não Iniciado |
+| 1.3 | Definir a interface `AlocadorStrategy` e implementar `PrioridadeAlocadorStrategy` (menor número de prioridade primeiro, mantendo a ordem do roadmap) | Strategy | Crítica | 🟢 Concluído |
 | 1.4 | Garantir compatibilidade: um pedaço só entra em bloco cujo tipo esteja na lista `aceita` da tarefa (ex.: Spring Boot novo nunca em `VIGILANCIA`) | Service | Crítica | 🔴 Não Iniciado |
 | 1.5 | Implementar folga mínima configurável entre blocos de estudo e treino/aulas, para absorver imprevistos | Service | Alta | 🔴 Não Iniciado |
 | 1.6 | Estender o exportador para incluir "Checklist de estudos" e a coluna de blocos com a tarefa e o pedaço (ex.: `Java Collections (2/6)`) | Exportação | Alta | 🔴 Não Iniciado |

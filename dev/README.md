@@ -20,7 +20,7 @@
 | # | Arquivo | Entrega | Status |
 | :---: | :--- | :--- | :--- |
 | 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟢 Concluído (14/14 · 100% · Gate 3 aprovado) |
-| 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🟡 Em Andamento (2/8 · 25% · Tarefas 1.2 e 1.1 concluídas · próxima: Tarefa 1.3) |
+| 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🟡 Em Andamento (3/8 · 38% · Tarefas 1.2, 1.1 e 1.3 concluídas · próxima: Tarefa 1.4) |
 | 4 | `dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md` | Feedback e aprendizado de horários | 🔴 Não Iniciado |
 | 5 | `dev/tasks/_4_TASKS_TURMAS.md` | Previsão de turmas | 🔴 Não Iniciado |
 | 6 | `dev/tasks/_5_TASKS_IA_LOCAL.md` | Roteiros e resumo com Ollama | 🔴 Não Iniciado |

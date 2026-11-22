@@ -41,11 +41,13 @@ cadencia/
     │   ├── planejamento/         # módulo de alocação de estudos
     │   │   ├── BacklogDto.java   # DTO YAML do backlog + Bean Validation (1.1)
     │   │   ├── BacklogRepository.java # porta de leitura do backlog de estudos (1.1)
+    │   │   ├── PedacoAlocado.java     # alocação de um Pedaco (blocoOrigem, data, inicio, fim, pedaco) (1.3)
+    │   │   ├── ResultadoAlocacao.java # saída imutável (alocados e naoAlocados) (1.3)
     │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos) (1.1)
     │   │   ├── PlanejamentoService.java
     │   │   └── strategies/
-    │   │       ├── AlocadorStrategy.java
-    │   │       ├── PrioridadeAlocadorStrategy.java
+    │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação (1.3)
+    │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3)
     │   │       └── ConfiabilidadeAlocadorStrategy.java
     │   ├── feedback/             # módulo de feedback e confiabilidade
     │   │   ├── FeedbackRepository.java
