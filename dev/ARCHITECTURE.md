@@ -76,6 +76,7 @@ cadencia/
     │       ├── Jornada.java
     │       ├── MargemEmpresa.java
     │       ├── Margens.java
+    │       ├── Pedaco.java
     │       ├── Semana.java
     │       ├── Tarefa.java
     │       ├── TipoBloco.java
@@ -104,6 +105,7 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 * `Bloco`: data, início, fim, `TipoBloco` (`PROFUNDO`, `INTERROMPIVEL`, `VIGILANCIA`), `descricao` opcional.
 * `AgendaConfiguracao`: configuração completa imutável da agenda (`Jornada`, `Margens` com `MargemEmpresa` por empresa, `Classificacao`, lista de `Compromisso` e lista de `BlocoManual`).
 * `Tarefa`: id, título, duração total, tipos aceitos, tamanho do pedaço, prioridade.
+* `Pedaco`: referência imutável à `Tarefa`, `numero`, `total` e duração positiva da fração (`numero/total`).
 * `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas.
 * `Semana`: ano, número ISO, lista de compromissos e blocos.
 

@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 0 (0%)
+* **Concluídas:** 1 (13%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 8 (100%)
+* **Pendentes:** 7 (87%)
 
 ---
 
@@ -23,7 +23,7 @@
 | # | Tarefa | Camada / Área | Prioridade | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | 1.1 | Implementar `BacklogDto`, `BacklogRepository` e `YamlBacklogRepository` lendo `backlog.yaml` (id, título, duração total, tipos aceitos, pedaço em minutos, prioridade) com validação | Repository / DTO | Crítica | 🔴 Não Iniciado |
-| 1.2 | Implementar `Tarefa` e `Pedaco` no domínio (duração total dividida em pedaços de 25 min por padrão, último pedaço pode ser menor) | Domain | Crítica | 🔴 Não Iniciado |
+| 1.2 | Implementar `Tarefa` e `Pedaco` no domínio (duração total dividida em pedaços de 25 min por padrão, último pedaço pode ser menor) | Domain | Crítica | 🟢 Concluído |
 | 1.3 | Definir a interface `AlocadorStrategy` e implementar `PrioridadeAlocadorStrategy` (menor número de prioridade primeiro, mantendo a ordem do roadmap) | Strategy | Crítica | 🔴 Não Iniciado |
 | 1.4 | Garantir compatibilidade: um pedaço só entra em bloco cujo tipo esteja na lista `aceita` da tarefa (ex.: Spring Boot novo nunca em `VIGILANCIA`) | Service | Crítica | 🔴 Não Iniciado |
 | 1.5 | Implementar folga mínima configurável entre blocos de estudo e treino/aulas, para absorver imprevistos | Service | Alta | 🔴 Não Iniciado |
