@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 12 (86%)
+* **Concluídas:** 13 (93%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 2 (14%)
+* **Pendentes:** 1 (7%)
 
 ---
 
@@ -63,7 +63,7 @@
 | # | Tarefa | Camada / Área | Prioridade | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | 3.1 | Implementar `ExportadorStrategy` e `MarkdownSemanalExportador` gerando o plano no formato do `@dev/DESIGN.md` (resumo + tabela por dia), de forma idempotente | Strategy / Exportação | Crítica | 🟢 Concluído |
-| 3.2 | Implementar o comando `cadencia semana [--data AAAA-MM-DD] [--agenda caminho]` escrevendo em `dados/semana/AAAA-Wnn.md` | CLI | Crítica | 🔴 Não Iniciado |
+| 3.2 | Implementar o comando `cadencia semana [--data AAAA-MM-DD] [--agenda caminho]` escrevendo em `dados/semana/AAAA-Wnn.md` | CLI | Crítica | 🟢 Concluído |
 | 3.3 | Atualizar `README.md` com instruções de uso e um exemplo real (anonimizado) da saída; marcar o Marco 1 como concluído e registrar no `@dev/GEMINI.md` | Documentação | Alta | 🔴 Não Iniciado |
 
 ### ✅ Gate 3 — Problema 1 Resolvido (critério de aceite do projeto)

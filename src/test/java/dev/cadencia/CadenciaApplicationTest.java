@@ -2,18 +2,103 @@ package dev.cadencia;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.cadencia.cli.CadenciaCommand;
+import dev.cadencia.cli.PicocliCommandRunner;
+import dev.cadencia.cli.PicocliSpringFactory;
+import dev.cadencia.cli.SemanaCommand;
+import dev.cadencia.exportacao.PlanoSemanalService;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ExitCodeGenerator;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest
+@ExtendWith(OutputCaptureExtension.class)
 class CadenciaApplicationTest {
+
+    private static Path diretorioDadosTemporario;
 
     @Value("${cadencia.fuso}")
     private String fuso;
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Autowired
+    private ExitCodeGenerator exitCodeGenerator;
+
+    @DynamicPropertySource
+    static void configurarDiretorioDadosTemporario(DynamicPropertyRegistry registry) throws IOException {
+        diretorioDadosTemporario = Files.createTempDirectory("cadencia-app-test-");
+        registry.add("cadencia.diretorio-dados", () -> diretorioDadosTemporario.toString());
+    }
+
+    @AfterAll
+    static void limparDiretorioTemporario() throws IOException {
+        if (diretorioDadosTemporario == null || !Files.exists(diretorioDadosTemporario)) {
+            return;
+        }
+        try (Stream<Path> caminhos = Files.walk(diretorioDadosTemporario)) {
+            for (Path caminho : caminhos.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(caminho);
+            }
+        }
+    }
+
     @Test
-    void contextoSobeComConfiguracaoPadrao() {
+    void contextoSobeSemArgumentosExibindoAjudaSemEfeitosColaterais(CapturedOutput output) throws IOException {
         assertThat(fuso).isEqualTo("America/Sao_Paulo");
+        assertThat(exitCodeGenerator.getExitCode()).isZero();
+        assertThat(applicationContext.getBean(PicocliSpringFactory.class)).isNotNull();
+        assertThat(applicationContext.getBean(PicocliCommandRunner.class)).isNotNull();
+        assertThat(applicationContext.getBean(CadenciaCommand.class)).isNotNull();
+        assertThat(applicationContext.getBean(SemanaCommand.class)).isNotNull();
+        assertThat(applicationContext.getBean(PlanoSemanalService.class)).isNotNull();
+
+        try (Stream<Path> arquivosCriados = Files.walk(diretorioDadosTemporario)) {
+            assertThat(arquivosCriados.filter(path -> !path.equals(diretorioDadosTemporario))).isEmpty();
+        }
+        assertThat(output.getOut()).contains("cadencia", "semana", "--verbose");
+    }
+
+    @Test
+    void executarPropagaExitCodeViaSpringApplicationExitSemEncerrarJvmDosTestes() throws IOException {
+        Path dadosExec = Files.createTempDirectory(diretorioDadosTemporario, "spring-exit-");
+
+        try (ConfigurableApplicationContext contextoSucesso = new SpringApplicationBuilder(CadenciaApplication.class)
+                .initializers(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                        new MapPropertySource("testDados", Map.of("cadencia.diretorio-dados", dadosExec.toString()))))
+                .run("semana", "--agenda", "exemplos/agenda.exemplo.yaml", "--data", "2026-12-09")) {
+            int codigoSucesso = SpringApplication.exit(contextoSucesso);
+            assertThat(codigoSucesso).isZero();
+        }
+        assertThat(Files.exists(dadosExec.resolve("semana/2026-W50.md"))).isTrue();
+        assertThat(Files.exists(Path.of("dados/semana"))).isFalse();
+
+        System.setProperty("cadencia.diretorio-dados", dadosExec.toString());
+        try {
+            assertThat(CadenciaApplication.executar("--help")).isZero();
+            assertThat(CadenciaApplication.executar("semana", "--data", "invalida")).isEqualTo(2);
+        } finally {
+            System.clearProperty("cadencia.diretorio-dados");
+        }
     }
 }

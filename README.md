@@ -2,7 +2,7 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Fase 2B em andamento (`12/14 · 86%`) — Tarefa 3.1 concluída (`ExportadorStrategy`, `MarkdownSemanalExportador` no formato do `@dev/DESIGN.md` e `SemanaPlanejada.intervalosOcupados` disponíveis); próxima etapa: Tarefa 3.2 (CLI `cadencia semana`).
+**Status:** Fase 2B em andamento (`13/14 · 93%`) — Tarefa 3.2 concluída (`cadencia semana [--data AAAA-MM-DD] [--agenda caminho]`, `PlanoSemanalService`, `PlanoSemanalRepository` e integração Spring Boot + Picocli); próxima etapa: Tarefa 3.3 (documentação de uso e exemplo no README).
 
 ## Stack
 

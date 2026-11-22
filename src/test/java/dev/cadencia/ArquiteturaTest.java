@@ -18,10 +18,8 @@ import com.tngtech.archunit.lang.ArchRule;
  * {@code *Service}. Por isso as regras identificam papéis por convenção de nome/tipo, e não por
  * pacotes globais {@code service}/{@code repository}.
  *
- * <p><b>Validação estrita (Gate 2):</b> {@code allowEmptyShould(true)} foi removido das três
- * regras que já possuem classes concretas ({@code dominio}, {@code agenda}, services e repositories).
- * Apenas {@code cliNaoAcessaAdaptersNemArquivos} mantém {@code allowEmptyShould(true)} até a
- * conclusão da Tarefa 3.2 (Gate 3), quando o pacote {@code dev.cadencia.cli} receber os comandos Picocli.
+ * <p><b>Validação estrita:</b> todas as regras arquiteturais operam sem {@code allowEmptyShould(true)},
+ * incluindo {@code cliNaoAcessaAdaptersNemArquivos} sobre os comandos Picocli em {@code dev.cadencia.cli}.
  */
 @AnalyzeClasses(packages = "dev.cadencia", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArquiteturaTest {
@@ -54,18 +52,12 @@ class ArquiteturaTest {
                     "java.nio.file..")
             .because("o domínio deve ser composto de records e regras puras (dev/RULES.md §1)");
 
-    /**
-     * Regra B — CLI conversa apenas com services, nunca com repositórios, adapters ou arquivos.
-     *
-     * <p>Mantém {@code allowEmptyShould(true)} temporariamente até o Gate 3, após a conclusão da
-     * Tarefa 3.2, quando os comandos Picocli forem implementados em {@code dev.cadencia.cli}.
-     */
+    // Regra B — CLI conversa apenas com services, nunca com repositórios, adapters ou arquivos.
     @ArchTest
     static final ArchRule cliNaoAcessaAdaptersNemArquivos = noClasses()
             .that().resideInAPackage("dev.cadencia.cli..")
             .should().dependOnClassesThat(QUALQUER_REPOSITORY.or(IO_DE_ARQUIVO))
-            .because("a CLI apenas recebe argumentos, chama services e imprime resultados")
-            .allowEmptyShould(true);
+            .because("a CLI apenas recebe argumentos, chama services e imprime resultados");
 
     // Regra C — services dependem de interfaces Repository, não de adapters concretos.
     @ArchTest

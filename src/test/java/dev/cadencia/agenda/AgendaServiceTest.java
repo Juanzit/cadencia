@@ -1253,6 +1253,57 @@ class AgendaServiceTest {
                                 "PLANTAO · Plantão quinta"));
     }
 
+    @Test
+    void deveGerarSemanaParaDataExplicitaViradaAnoIsoEDelegacaoDeRelogio() {
+        List<Compromisso> compromissos = List.of(
+                new Compromisso(DayOfWeek.WEDNESDAY, LocalTime.of(10, 0), Duration.ofHours(1),
+                        TipoCompromisso.REUNIAO, "EmpresaA", "REMOTO", "Reunião semanal"));
+
+        // 2026-11-23T02:00Z corresponde a domingo 2026-11-22 23:00 em America/Sao_Paulo (semana 2026-W47)
+        Clock relogioDomSaoPaulo = Clock.fixed(Instant.parse("2026-11-23T02:00:00Z"), ZoneOffset.UTC);
+        AgendaService service = criarService(
+                JORNADA_PADRAO,
+                new Margens(0, EMPRESAS_PADRAO),
+                compromissos,
+                relogioDomSaoPaulo);
+
+        // Sem data explícita: delega para o Clock no fuso America/Sao_Paulo -> semana 2026-W47 (16/11 a 22/11)
+        SemanaPlanejada pelaDataRelogio = service.gerarSemana(CAMINHO_FICTICIO);
+        assertThat(pelaDataRelogio.inicioSemana()).isEqualTo(LocalDate.of(2026, 11, 16));
+        assertThat(pelaDataRelogio.semana().ano()).isEqualTo(2026);
+        assertThat(pelaDataRelogio.semana().numeroIso()).isEqualTo(47);
+        assertThat(pelaDataRelogio.intervalosOcupados())
+                .extracting(IntervaloOcupado::data)
+                .containsExactly(LocalDate.of(2026, 11, 18));
+
+        // Com data explícita de outra semana: ignora o Clock e usa a semana da data informada (2026-W50)
+        SemanaPlanejada outraSemana = service.gerarSemana(CAMINHO_FICTICIO, LocalDate.of(2026, 12, 9));
+        assertThat(outraSemana.inicioSemana()).isEqualTo(LocalDate.of(2026, 12, 7));
+        assertThat(outraSemana.semana().ano()).isEqualTo(2026);
+        assertThat(outraSemana.semana().numeroIso()).isEqualTo(50);
+        assertThat(outraSemana.intervalosOcupados())
+                .extracting(IntervaloOcupado::data)
+                .containsExactly(LocalDate.of(2026, 12, 9));
+
+        // Virada do ano civil 2025 -> 2026: 2025-12-31 pertence à semana ISO 2026-W01 (início em 2025-12-29)
+        SemanaPlanejada virada2026W01 = service.gerarSemana(CAMINHO_FICTICIO, LocalDate.of(2025, 12, 31));
+        assertThat(virada2026W01.inicioSemana()).isEqualTo(LocalDate.of(2025, 12, 29));
+        assertThat(virada2026W01.semana().ano()).isEqualTo(2026);
+        assertThat(virada2026W01.semana().numeroIso()).isEqualTo(1);
+        assertThat(virada2026W01.intervalosOcupados())
+                .extracting(IntervaloOcupado::data)
+                .containsExactly(LocalDate.of(2025, 12, 31));
+
+        // Virada do ano civil 2026 -> 2027: 2027-01-01 pertence à semana ISO 2026-W53 (início em 2026-12-28)
+        SemanaPlanejada virada2026W53 = service.gerarSemana(CAMINHO_FICTICIO, LocalDate.of(2027, 1, 1));
+        assertThat(virada2026W53.inicioSemana()).isEqualTo(LocalDate.of(2026, 12, 28));
+        assertThat(virada2026W53.semana().ano()).isEqualTo(2026);
+        assertThat(virada2026W53.semana().numeroIso()).isEqualTo(53);
+
+        assertThatNullPointerException().isThrownBy(() -> service.gerarSemana(null, LocalDate.of(2026, 11, 23)));
+        assertThatNullPointerException().isThrownBy(() -> service.gerarSemana(CAMINHO_FICTICIO, null));
+    }
+
     private static AgendaService criarService(
             Margens margens, List<Compromisso> compromissos, Clock clock) {
         return criarService(JORNADA_PADRAO, margens, CLASSIFICACAO_PADRAO, compromissos, List.of(), clock);

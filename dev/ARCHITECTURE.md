@@ -19,13 +19,19 @@ cadencia/
 ├── dados/                        # dados reais (.gitignore: dados/* e !dados/.gitkeep)
 └── src/
     ├── main/java/dev/cadencia/
-    │   ├── cli/                  # CONTROLLER: comandos Picocli
+    │   ├── CadenciaApplication.java  # ponto de entrada Spring Boot (SpringApplication.exit + System.exit)
+    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e cadencia.diretorio-dados
+    │   ├── cli/                  # CONTROLLER: comandos Picocli + integração Spring Boot
+    │   │   ├── CadenciaCommand.java       # comando raiz sem efeitos colaterais em inicialização sem subcomando
+    │   │   ├── PicocliCommandRunner.java  # CommandLineRunner + ExitCodeGenerator (exit codes 0/1/2 e --verbose)
+    │   │   ├── PicocliSpringFactory.java  # CommandLine.IFactory integrado ao ApplicationContext
+    │   │   └── SemanaCommand.java         # subcomando semana [--data AAAA-MM-DD] [--agenda caminho]
     │   ├── agenda/               # módulo de agenda e blocos livres
     │   │   ├── AgendaDto.java            # DTO + validação Bean Validation do YAML (incluindo blocos manuais sem sobreposição)
     │   │   ├── AgendaExpandida.java      # saída semanal imutável (ocupações, configuração e avisos)
     │   │   ├── AgendaIntervalosLivres.java # saída semanal imutável de janelas livres da jornada
     │   │   ├── AgendaRepository.java     # porta (retorna AgendaConfiguracao)
-    │   │   ├── AgendaService.java        # expansão semanal, intervalos livres e classificação de blocos da Semana (2.3–2.5)
+    │   │   ├── AgendaService.java        # expansão semanal, intervalos livres, classificação de blocos e sobrecarga por data (2.3–2.5, 3.2)
     │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
     │   │   ├── IntervaloLivre.java       # janela livre diária [inicio, fim) com duracao() positiva
     │   │   ├── IntervaloOcupado.java     # fragmento diário ocupado [inicio, fim)
@@ -53,7 +59,11 @@ cadencia/
     │   │   ├── OllamaGeradorTexto.java
     │   │   ├── PdfExtrator.java
     │   │   └── RoteiroService.java
-    │   ├── exportacao/           # saída Markdown
+    │   ├── exportacao/           # saída Markdown e persistência do plano semanal
+    │   │   ├── MarkdownPlanoSemanalRepository.java # adapter de gravação UTF-8 + LF criando diretórios pais
+    │   │   ├── PlanoSemanalGerado.java             # resultado imutável (arquivoSaida + SemanaPlanejada)
+    │   │   ├── PlanoSemanalRepository.java         # porta de persistência do plano semanal
+    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, ExportadorStrategy e PlanoSemanalRepository (3.2)
     │   │   └── strategies/
     │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação
     │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal (3.1)
@@ -71,7 +81,7 @@ cadencia/
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
     │       └── Turma.java
-    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest) + ArquiteturaTest (ArchUnit estrito no Gate 2)
+    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 4 regras)
 ```
 
 > `groupId` definido: `dev.cadencia` (Q4 decidida).
@@ -84,7 +94,7 @@ backlog.yaml ─> BacklogRepository ─> PlanejamentoService (AlocadorStrategy) 
 feedback/*.md ─> FeedbackRepository ─> ConfiabilidadeService ───────────────────────┤
 turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ──────────────────────────┤
                                                                                     v
-                                                 ExportadorStrategy ──> semana/AAAA-Wnn.md
+                     PlanoSemanalService (ExportadorStrategy + PlanoSemanalRepository) ──> semana/AAAA-Wnn.md
 (Fase 6)  PDF ──> PdfExtrator ──> RoteiroService ──> GeradorTexto (Ollama) ──> roteiros/*.md
 ```
 

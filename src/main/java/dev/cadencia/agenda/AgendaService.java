@@ -90,7 +90,7 @@ public class AgendaService {
      * para a semana ISO corrente (segunda a domingo) no fuso {@code America/Sao_Paulo}.
      */
     public AgendaExpandida expandir(Path caminhoAgenda) {
-        return expandirInterno(caminhoAgenda).agendaExpandida();
+        return expandirInterno(caminhoAgenda, dataAtualDoRelogio()).agendaExpandida();
     }
 
     /**
@@ -102,14 +102,26 @@ public class AgendaService {
     }
 
     /**
-     * Classifica os intervalos livres, aplica blocos manuais com precedência sobre {@code PLANTAO}
-     * e monta a {@link Semana} ISO completa preservando avisos da expansão e conflitos manuais.
+     * Classifica os intervalos livres da semana ISO corrente obtida do {@link Clock} no fuso
+     * {@code America/Sao_Paulo}, delegando para {@link #gerarSemana(Path, LocalDate)}.
+     */
+    public SemanaPlanejada gerarSemana(Path caminhoAgenda) {
+        return gerarSemana(caminhoAgenda, dataAtualDoRelogio());
+    }
+
+    /**
+     * Classifica os intervalos livres para a semana ISO que contém {@code dataReferencia}, aplica
+     * blocos manuais com precedência sobre {@code PLANTAO} e monta a {@link Semana} ISO completa
+     * preservando avisos da expansão e conflitos manuais.
      *
      * <p>Os fragmentos originados de {@link TipoCompromisso#PLANTAO} são convertidos em blocos de
      * vigilância e excluídos de {@link SemanaPlanejada#intervalosOcupados()}.
      */
-    public SemanaPlanejada gerarSemana(Path caminhoAgenda) {
-        ExpansaoInterna expansao = expandirInterno(caminhoAgenda);
+    public SemanaPlanejada gerarSemana(Path caminhoAgenda, LocalDate dataReferencia) {
+        Objects.requireNonNull(caminhoAgenda, "caminhoAgenda não pode ser nulo");
+        Objects.requireNonNull(dataReferencia, "dataReferencia não pode ser nula");
+
+        ExpansaoInterna expansao = expandirInterno(caminhoAgenda, dataReferencia);
         AgendaExpandida expandida = expansao.agendaExpandida();
         AgendaConfiguracao configuracao = expandida.configuracao();
         validarBlocosManuaisSemSobreposicao(configuracao.blocosManuais());
@@ -155,12 +167,16 @@ public class AgendaService {
         return new SemanaPlanejada(inicioSemana, semana, expansao.intervalosOcupadosSemPlantao(), avisos);
     }
 
-    private ExpansaoInterna expandirInterno(Path caminhoAgenda) {
+    private LocalDate dataAtualDoRelogio() {
+        return LocalDate.ofInstant(clock.instant(), FUSO_PADRAO);
+    }
+
+    private ExpansaoInterna expandirInterno(Path caminhoAgenda, LocalDate dataReferencia) {
         Objects.requireNonNull(caminhoAgenda, "caminhoAgenda não pode ser nulo");
+        Objects.requireNonNull(dataReferencia, "dataReferencia não pode ser nula");
         AgendaConfiguracao configuracao = agendaRepository.carregar(caminhoAgenda);
 
-        LocalDate hoje = LocalDate.ofInstant(clock.instant(), FUSO_PADRAO);
-        LocalDate inicioSemana = hoje.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate inicioSemana = dataReferencia.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate fimSemana = inicioSemana.plusDays(6);
 
         List<Compromisso> compromissosOrdenados = ordenarCompromissos(configuracao.compromissos());
