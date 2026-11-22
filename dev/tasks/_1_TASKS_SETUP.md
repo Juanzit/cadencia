@@ -69,8 +69,8 @@
 ### ✅ Gate 3 — Problema 1 Resolvido (critério de aceite do projeto)
 - [x] `cadencia semana` gera o arquivo da semana a partir da agenda de exemplo
 - [x] Rodar duas vezes gera arquivos idênticos
-- [ ] Abrir o `.md` no AppFlowy mostra tabelas e checklist corretamente
-- [ ] **Teste real:** rodar com sua agenda real (em `dados/`) e conferir se os blocos livres batem com a sua semana de verdade
-- [ ] Ajustes das regras reais registrados (Q3 e Q5 do `@dev/GEMINI.md` respondidas ou mantidas em aberto)
+- [x] Abrir o `.md` no AppFlowy mostra tabelas e checklist corretamente
+- [x] **Teste real:** rodar com sua agenda real (em `dados/`) e conferir se os blocos livres batem com a sua semana de verdade
+- [x] Ajustes das regras reais registrados (Q3 e Q5 do `@dev/GEMINI.md` respondidas ou mantidas em aberto)
 
 > Só avance para `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` quando todos os gates acima estiverem aprovados.

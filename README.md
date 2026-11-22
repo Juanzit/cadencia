@@ -2,7 +2,7 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Fase 2B implementada (`14/14` tarefas das Fases 1–2B concluídas) — CLI `cadencia semana` funcional, regras JaCoCo independentes ativas nos 5 pacotes principais e critérios automatizados do Gate 3 (`2/5`) verificados; aguardando validação manual final (AppFlowy, agenda real em `dados/` e `Q3`/`Q5`) para aprovação do Gate 3.
+**Status:** Marco 1 concluído (Fases 1–2B: `14/14` tarefas concluídas e **Gate 3 aprovado**) — CLI `cadencia semana` funcional, regras JaCoCo independentes ativas nos 5 pacotes principais e validações automatizadas e manuais do Gate 3 concluídas.
 
 ## Stack
 

@@ -10,6 +10,7 @@ import dev.cadencia.exportacao.PlanoSemanalService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -82,6 +83,9 @@ class CadenciaApplicationTest {
     @Test
     void executarPropagaExitCodeViaSpringApplicationExitSemEncerrarJvmDosTestes() throws IOException {
         Path dadosExec = Files.createTempDirectory(diretorioDadosTemporario, "spring-exit-");
+        Path alvoRealW50 = Path.of("dados/semana/2026-W50.md");
+        boolean alvoRealExistia = Files.exists(alvoRealW50);
+        Instant modificacaoAntes = alvoRealExistia ? Files.getLastModifiedTime(alvoRealW50).toInstant() : null;
 
         try (ConfigurableApplicationContext contextoSucesso = new SpringApplicationBuilder(CadenciaApplication.class)
                 .initializers(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
@@ -91,7 +95,10 @@ class CadenciaApplicationTest {
             assertThat(codigoSucesso).isZero();
         }
         assertThat(Files.exists(dadosExec.resolve("semana/2026-W50.md"))).isTrue();
-        assertThat(Files.exists(Path.of("dados/semana"))).isFalse();
+        assertThat(Files.exists(alvoRealW50)).isEqualTo(alvoRealExistia);
+        if (modificacaoAntes != null) {
+            assertThat(Files.getLastModifiedTime(alvoRealW50).toInstant()).isEqualTo(modificacaoAntes);
+        }
 
         System.setProperty("cadencia.diretorio-dados", dadosExec.toString());
         try {
