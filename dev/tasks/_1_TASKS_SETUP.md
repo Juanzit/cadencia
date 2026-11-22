@@ -14,9 +14,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 14
-* **Concluídas:** 13 (93%)
+* **Concluídas:** 14 (100%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 1 (7%)
+* **Pendentes:** 0 (0%)
 
 ---
 
@@ -64,11 +64,11 @@
 | :--- | :--- | :--- | :--- | :--- |
 | 3.1 | Implementar `ExportadorStrategy` e `MarkdownSemanalExportador` gerando o plano no formato do `@dev/DESIGN.md` (resumo + tabela por dia), de forma idempotente | Strategy / Exportação | Crítica | 🟢 Concluído |
 | 3.2 | Implementar o comando `cadencia semana [--data AAAA-MM-DD] [--agenda caminho]` escrevendo em `dados/semana/AAAA-Wnn.md` | CLI | Crítica | 🟢 Concluído |
-| 3.3 | Atualizar `README.md` com instruções de uso e um exemplo real (anonimizado) da saída; marcar o Marco 1 como concluído e registrar no `@dev/GEMINI.md` | Documentação | Alta | 🔴 Não Iniciado |
+| 3.3 | Atualizar `README.md` com instruções de uso e um exemplo real (anonimizado) da saída; marcar o Marco 1 como concluído e registrar no `@dev/GEMINI.md` | Documentação | Alta | 🟢 Concluído |
 
 ### ✅ Gate 3 — Problema 1 Resolvido (critério de aceite do projeto)
-- [ ] `cadencia semana` gera o arquivo da semana a partir da agenda de exemplo
-- [ ] Rodar duas vezes gera arquivos idênticos
+- [x] `cadencia semana` gera o arquivo da semana a partir da agenda de exemplo
+- [x] Rodar duas vezes gera arquivos idênticos
 - [ ] Abrir o `.md` no AppFlowy mostra tabelas e checklist corretamente
 - [ ] **Teste real:** rodar com sua agenda real (em `dados/`) e conferir se os blocos livres batem com a sua semana de verdade
 - [ ] Ajustes das regras reais registrados (Q3 e Q5 do `@dev/GEMINI.md` respondidas ou mantidas em aberto)
