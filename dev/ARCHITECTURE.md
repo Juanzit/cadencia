@@ -39,8 +39,9 @@ cadencia/
     │   │   ├── TipoIntervaloOcupado.java # COMPROMISSO, MARGEM_ANTES, MARGEM_DEPOIS, DESLOCAMENTO_AUTOMATICO
     │   │   └── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
     │   ├── planejamento/         # módulo de alocação de estudos
-    │   │   ├── BacklogDto.java
-    │   │   ├── BacklogRepository.java
+    │   │   ├── BacklogDto.java   # DTO YAML do backlog + Bean Validation (1.1)
+    │   │   ├── BacklogRepository.java # porta de leitura do backlog de estudos (1.1)
+    │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos) (1.1)
     │   │   ├── PlanejamentoService.java
     │   │   └── strategies/
     │   │       ├── AlocadorStrategy.java
