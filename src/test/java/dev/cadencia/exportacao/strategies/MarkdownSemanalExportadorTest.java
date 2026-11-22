@@ -331,11 +331,13 @@ class MarkdownSemanalExportadorTest {
 
             assertThat(primeira).isEqualTo(segunda);
             assertThat(primeira).doesNotContain("\r").endsWith("\n").doesNotEndWith("\n\n");
-            assertThat(primeira).contains(
-                    "- Blocos livres: 24 (profundo: 18 · interrompível: 5 · vigilância: 1)",
-                    "- Tempo livre total: 85h15",
-                    "- Estudos alocados: 8 pedaço(s) (3h20) · não alocados: 0 pedaço(s)",
-                    "- Turmas em transição: nenhuma");
+            assertThat(primeira).contains("""
+                    ## Resumo
+                    - Blocos livres: 24 (profundo: 18 · interrompível: 5 · vigilância: 1)
+                    - Tempo livre total: 85h15
+                    - Turmas em transição: nenhuma
+                    - Pedaços alocados: 8 (3h20)
+                    """);
             assertThat(primeira).contains("""
                     ## Segunda-feira, 23/11
                     | Horário | Tipo | Detalhe |
@@ -393,11 +395,18 @@ class MarkdownSemanalExportadorTest {
                 1);
         ResultadoAlocacao nadaAlocado = new ResultadoAlocacao(List.of(), tarefaIncompativel.dividirEmPedacos());
         String mdSemAlocacao = exportador.exportar(semana, nadaAlocado);
-        assertThat(mdSemAlocacao).contains(
-                "- Estudos alocados: 0 pedaço(s) (0h00) · não alocados: 2 pedaço(s)",
-                "| 08:00–09:00 | **Bloco profundo** | Disponível (1h00) |",
-                "- Nenhum estudo alocado na semana.",
-                "Não foi possível alocar todos os pedaços de \"Leitura | Leve Parte 1\" (1/2, 2/2)");
+        assertThat(mdSemAlocacao)
+                .contains("""
+                        ## Resumo
+                        - Blocos livres: 1 (profundo: 1 · interrompível: 0 · vigilância: 0)
+                        - Tempo livre total: 1h00
+                        - Turmas em transição: nenhuma
+                        """)
+                .contains(
+                        "| 08:00–09:00 | **Bloco profundo** | Disponível (1h00) |",
+                        "- [ ] seg 08:00–09:00 · Bloco profundo (1h00)",
+                        "Não foi possível alocar todos os pedaços de \"Leitura | Leve Parte 1\" (1/2, 2/2)")
+                .doesNotContain("Pedaços alocados");
 
         Tarefa tarefaComPipe = new Tarefa(
                 "t-pipe",
@@ -417,5 +426,62 @@ class MarkdownSemanalExportadorTest {
                 "| 08:00–08:25 | **Bloco profundo** | Java \\| Streams Avançado (1/1) |",
                 "| 08:25–09:00 | **Bloco profundo** | Disponível (0h35) |",
                 "- [ ] seg 08:00–08:25 · Java | Streams Avançado (1/1)");
+    }
+
+    @Test
+    void deveRespeitarInterrompivelMinimoMinNosTrechosResiduaisEAssociarPorBlocoOrigemSemDuplicidade() {
+        LocalDate segunda = LocalDate.of(2026, 11, 23);
+        Bloco bloco = new Bloco(segunda, LocalTime.of(8, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, null);
+        Tarefa tarefa = new Tarefa(
+                "java-core", "Java Core", Duration.ofMinutes(25), List.of(TipoBloco.PROFUNDO), 1);
+        PedacoAlocado alocadoNoBloco = new PedacoAlocado(
+                bloco, segunda, LocalTime.of(8, 0), LocalTime.of(8, 25), tarefa.dividirEmPedacos().get(0));
+        ResultadoAlocacao resultado = new ResultadoAlocacao(List.of(alocadoNoBloco), List.of());
+
+        AgendaConfiguracao configMin40 = new AgendaConfiguracao(
+                new Jornada(LocalTime.of(7, 0), LocalTime.of(23, 0)),
+                new Margens(0, Map.of()),
+                new Classificacao(90, 40),
+                List.of(),
+                List.of());
+        SemanaPlanejada semanaMin40 = new SemanaPlanejada(
+                segunda, new Semana(2026, 48, List.of(), List.of(bloco)), List.of(), List.of(), configMin40);
+        assertThat(exportador.exportar(semanaMin40, resultado))
+                .contains("| 08:00–08:25 | **Bloco profundo** | Java Core (1/1) |")
+                .doesNotContain("Disponível (0h35)");
+
+        AgendaConfiguracao configMin30 = new AgendaConfiguracao(
+                new Jornada(LocalTime.of(7, 0), LocalTime.of(23, 0)),
+                new Margens(0, Map.of()),
+                new Classificacao(90, 30),
+                List.of(),
+                List.of());
+        SemanaPlanejada semanaMin30 = new SemanaPlanejada(
+                segunda, new Semana(2026, 48, List.of(), List.of(bloco)), List.of(), List.of(), configMin30);
+        assertThat(exportador.exportar(semanaMin30, resultado))
+                .contains(
+                        "| 08:00–08:25 | **Bloco profundo** | Java Core (1/1) |",
+                        "| 08:25–09:00 | **Bloco profundo** | Disponível (0h35) |");
+
+        // Dois blocos no mesmo intervalo: apenas o bloco correspondente a blocoOrigem deve consumir a alocação
+        Bloco blocoA = new Bloco(segunda, LocalTime.of(8, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, "Bloco A");
+        Bloco blocoB = new Bloco(segunda, LocalTime.of(8, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, "Bloco B");
+        PedacoAlocado alocadoEmB = new PedacoAlocado(
+                blocoB, segunda, LocalTime.of(8, 0), LocalTime.of(8, 25), tarefa.dividirEmPedacos().get(0));
+        SemanaPlanejada semanaDoisBlocos = new SemanaPlanejada(
+                segunda,
+                new Semana(2026, 48, List.of(), List.of(blocoA, blocoB)),
+                List.of(),
+                List.of(),
+                configMin30);
+
+        String mdDoisBlocos = exportador.exportar(
+                semanaDoisBlocos, new ResultadoAlocacao(List.of(alocadoEmB), List.of()));
+        assertThat(mdDoisBlocos)
+                .contains(
+                        "| 08:00–08:25 | **Bloco profundo** | Java Core (1/1) |",
+                        "| 08:00–09:00 | **Bloco profundo** | Bloco A |",
+                        "| 08:25–09:00 | **Bloco profundo** | Bloco B |");
+        assertThat(mdDoisBlocos.split("Bloco A", -1)).hasSize(2);
     }
 }

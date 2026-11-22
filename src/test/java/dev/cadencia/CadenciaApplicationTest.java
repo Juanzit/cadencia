@@ -11,6 +11,7 @@ import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.strategies.AlocadorStrategy;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -113,5 +114,34 @@ class CadenciaApplicationTest {
         } finally {
             System.clearProperty("cadencia.diretorio-dados");
         }
+    }
+
+    @Test
+    void deveAplicarPropriedadeCadenciaPedacoPadraoMinQuandoOmitidaNoBacklogYaml() throws IOException {
+        Path dadosCustom = Files.createTempDirectory(diretorioDadosTemporario, "pedaco-custom-");
+        Path backlog = dadosCustom.resolve("backlog.yaml");
+        Files.writeString(backlog, """
+                tarefas:
+                  - id: "java-streams"
+                    titulo: "Java Streams"
+                    duracao_total_min: 70
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(CadenciaApplication.class)
+                .initializers(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                        new MapPropertySource("customPedaco", Map.of(
+                                "cadencia.diretorio-dados", dadosCustom.toString(),
+                                "cadencia.pedaco-padrao-min", "35"))))
+                .run("semana", "--agenda", "exemplos/agenda.exemplo.yaml", "--data", "2026-11-23")) {
+            assertThat(SpringApplication.exit(contexto)).isZero();
+        }
+
+        String markdown = Files.readString(dadosCustom.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
+        assertThat(markdown).contains(
+                "- Pedaços alocados: 2 (1h10)",
+                "| 07:00–07:35 | **Bloco profundo** | Java Streams (1/2) |",
+                "| 07:35–08:10 | **Bloco profundo** | Java Streams (2/2) |");
     }
 }

@@ -20,13 +20,15 @@
 | # | Arquivo | Entrega | Status |
 | :---: | :--- | :--- | :--- |
 | 1–2 | `dev/tasks/_1_TASKS_SETUP.md` | Setup + blocos livres da semana | 🟢 Concluído (14/14 · 100% · Gate 3 aprovado) |
-| 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🟡 Em Andamento (6/8 · 75% · Tarefas 1.1–1.6 concluídas · próxima: Tarefa 1.7) |
+| 3 | `dev/tasks/_2_TASKS_ALOCACAO_ESTUDOS.md` | Estudos alocados nos blocos | 🟢 Concluído (8/8 · 100% · Gate 4 aprovado · Marco 2 — v0.2) |
 | 4 | `dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md` | Feedback e aprendizado de horários | 🔴 Não Iniciado |
 | 5 | `dev/tasks/_4_TASKS_TURMAS.md` | Previsão de turmas | 🔴 Não Iniciado |
 | 6 | `dev/tasks/_5_TASKS_IA_LOCAL.md` | Roteiros e resumo com Ollama | 🔴 Não Iniciado |
 | 7 | `dev/tasks/_6_TASKS_PORTFOLIO.md` | Release v0.1.0 | 🔴 Não Iniciado |
 
 **Comece por `dev/tasks/_1_TASKS_SETUP.md`.** Cada fase só avança quando o gate da anterior está aprovado.
+
+**Próxima etapa:** Fase 4 — Feedback e Confiabilidade (`dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md`).
 
 ## Stack
 

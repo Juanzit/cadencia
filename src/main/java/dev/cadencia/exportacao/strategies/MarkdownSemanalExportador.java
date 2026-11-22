@@ -85,14 +85,29 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                 ? resultadoAlocacao.alocados().stream().sorted(ORDEM_ALOCADOS).toList()
                 : List.of();
 
+        Duration duracaoMinimaResidual = duracaoMinimaResidual(semanaPlanejada);
+
         StringBuilder md = new StringBuilder();
         escreverCabecalho(md, semana, inicioSemana, fimSemana);
-        escreverResumo(md, blocosOrdenados, resultadoAlocacao);
+        escreverResumo(md, blocosOrdenados, alocadosOrdenados);
         escreverDiasDaSemana(
-                md, inicioSemana, semanaPlanejada.intervalosOcupados(), blocosOrdenados, alocadosOrdenados);
-        escreverChecklist(md, blocosOrdenados, alocadosOrdenados, resultadoAlocacao != null);
+                md,
+                inicioSemana,
+                semanaPlanejada.intervalosOcupados(),
+                blocosOrdenados,
+                alocadosOrdenados,
+                duracaoMinimaResidual);
+        escreverChecklist(md, blocosOrdenados, alocadosOrdenados);
         escreverAvisos(md, semanaPlanejada.avisos(), resultadoAlocacao);
         return md.toString();
+    }
+
+    private static Duration duracaoMinimaResidual(SemanaPlanejada semanaPlanejada) {
+        if (semanaPlanejada.configuracao() != null) {
+            return Duration.ofMinutes(
+                    semanaPlanejada.configuracao().classificacao().interrompivelMinimoMin());
+        }
+        return Tarefa.TAMANHO_PEDACO_PADRAO;
     }
 
     private static void escreverCabecalho(
@@ -109,7 +124,7 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     }
 
     private static void escreverResumo(
-            StringBuilder md, List<Bloco> blocosOrdenados, ResultadoAlocacao resultadoAlocacao) {
+            StringBuilder md, List<Bloco> blocosOrdenados, List<PedacoAlocado> alocadosOrdenados) {
         long profundos = 0;
         long interrompiveis = 0;
         long vigilancias = 0;
@@ -130,22 +145,20 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                         "- Blocos livres: %d (profundo: %d · interrompível: %d · vigilância: %d)",
                         blocosOrdenados.size(), profundos, interrompiveis, vigilancias))
                 .append(LF)
-                .append("- Tempo livre total: ").append(formatarDuracao(tempoTotal)).append(LF);
+                .append("- Tempo livre total: ").append(formatarDuracao(tempoTotal)).append(LF)
+                .append("- Turmas em transição: nenhuma").append(LF);
 
-        if (resultadoAlocacao != null) {
-            Duration tempoAlocado = resultadoAlocacao.alocados().stream()
+        if (!alocadosOrdenados.isEmpty()) {
+            Duration tempoAlocado = alocadosOrdenados.stream()
                     .map(alocado -> alocado.pedaco().duracao())
                     .reduce(Duration.ZERO, Duration::plus);
             md.append(String.format(
                             Locale.ROOT,
-                            "- Estudos alocados: %d pedaço(s) (%s) · não alocados: %d pedaço(s)",
-                            resultadoAlocacao.alocados().size(),
-                            formatarDuracao(tempoAlocado),
-                            resultadoAlocacao.naoAlocados().size()))
+                            "- Pedaços alocados: %d (%s)",
+                            alocadosOrdenados.size(),
+                            formatarDuracao(tempoAlocado)))
                     .append(LF);
         }
-
-        md.append("- Turmas em transição: nenhuma").append(LF);
     }
 
     private static void escreverDiasDaSemana(
@@ -153,10 +166,11 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
             LocalDate inicioSemana,
             List<IntervaloOcupado> intervalosOcupados,
             List<Bloco> blocosOrdenados,
-            List<PedacoAlocado> alocadosOrdenados) {
+            List<PedacoAlocado> alocadosOrdenados,
+            Duration duracaoMinimaResidual) {
 
         Map<LocalDate, List<LinhaDia>> linhasPorDia = agruparLinhasPorDia(
-                intervalosOcupados, blocosOrdenados, alocadosOrdenados);
+                intervalosOcupados, blocosOrdenados, alocadosOrdenados, duracaoMinimaResidual);
 
         for (int diaOffset = 0; diaOffset < DIAS_DA_SEMANA; diaOffset++) {
             LocalDate data = inicioSemana.plusDays(diaOffset);
@@ -191,7 +205,8 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     private static Map<LocalDate, List<LinhaDia>> agruparLinhasPorDia(
             List<IntervaloOcupado> intervalosOcupados,
             List<Bloco> blocosOrdenados,
-            List<PedacoAlocado> alocadosOrdenados) {
+            List<PedacoAlocado> alocadosOrdenados,
+            Duration duracaoMinimaResidual) {
         Map<LocalDate, List<LinhaDia>> porDia = new HashMap<>();
 
         for (IntervaloOcupado ocupado : intervalosOcupados) {
@@ -204,13 +219,17 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                     .add(linhaDePedacoAlocado(alocado));
         }
 
-        for (Bloco bloco : blocosOrdenados) {
-            List<PedacoAlocado> alocadosNoBloco = filtrarAlocadosNoBloco(bloco, alocadosOrdenados);
+        Map<Integer, List<PedacoAlocado>> alocadosPorBloco = associarAlocadosAosBlocos(
+                blocosOrdenados, alocadosOrdenados);
+
+        for (int indiceBloco = 0; indiceBloco < blocosOrdenados.size(); indiceBloco++) {
+            Bloco bloco = blocosOrdenados.get(indiceBloco);
+            List<PedacoAlocado> alocadosNoBloco = alocadosPorBloco.getOrDefault(indiceBloco, List.of());
             if (alocadosNoBloco.isEmpty()) {
                 porDia.computeIfAbsent(bloco.data(), ignored -> new ArrayList<>())
                         .add(linhaDeBloco(bloco));
             } else {
-                adicionarBlocosResiduais(alocadosNoBloco, porDia);
+                adicionarBlocosResiduais(alocadosNoBloco, duracaoMinimaResidual, porDia);
             }
         }
 
@@ -220,43 +239,79 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
         return porDia;
     }
 
-    private static List<PedacoAlocado> filtrarAlocadosNoBloco(
-            Bloco bloco, List<PedacoAlocado> alocadosOrdenados) {
-        if (alocadosOrdenados.isEmpty()) {
-            return List.of();
+    private static Map<Integer, List<PedacoAlocado>> associarAlocadosAosBlocos(
+            List<Bloco> blocosOrdenados, List<PedacoAlocado> alocadosOrdenados) {
+        if (alocadosOrdenados.isEmpty() || blocosOrdenados.isEmpty()) {
+            return Map.of();
         }
-        List<PedacoAlocado> correspondentes = new ArrayList<>();
-        for (PedacoAlocado alocado : alocadosOrdenados) {
-            if (alocado.data().equals(bloco.data())
-                    && !alocado.inicio().isBefore(bloco.inicio())
-                    && !alocado.fim().isAfter(bloco.fim())) {
-                correspondentes.add(alocado);
+        Map<Integer, List<PedacoAlocado>> porIndiceBloco = new HashMap<>();
+        boolean[] associados = new boolean[alocadosOrdenados.size()];
+
+        // Associa primeiro por igualdade exata com blocoOrigem, depois por subintervalo ajustado por folga.
+        for (int i = 0; i < alocadosOrdenados.size(); i++) {
+            Bloco origem = alocadosOrdenados.get(i).blocoOrigem();
+            for (int b = 0; b < blocosOrdenados.size(); b++) {
+                if (origem.equals(blocosOrdenados.get(b))) {
+                    porIndiceBloco.computeIfAbsent(b, ignored -> new ArrayList<>())
+                            .add(alocadosOrdenados.get(i));
+                    associados[i] = true;
+                    break;
+                }
             }
         }
-        return correspondentes;
+
+        for (int i = 0; i < alocadosOrdenados.size(); i++) {
+            if (associados[i]) {
+                continue;
+            }
+            Bloco origem = alocadosOrdenados.get(i).blocoOrigem();
+            for (int b = 0; b < blocosOrdenados.size(); b++) {
+                if (pertenceAoBloco(origem, blocosOrdenados.get(b))) {
+                    porIndiceBloco.computeIfAbsent(b, ignored -> new ArrayList<>())
+                            .add(alocadosOrdenados.get(i));
+                    associados[i] = true;
+                    break;
+                }
+            }
+        }
+        return porIndiceBloco;
+    }
+
+    private static boolean pertenceAoBloco(Bloco blocoOrigem, Bloco candidato) {
+        return blocoOrigem.data().equals(candidato.data())
+                && blocoOrigem.tipo() == candidato.tipo()
+                && Objects.equals(blocoOrigem.descricao(), candidato.descricao())
+                && !blocoOrigem.inicio().isBefore(candidato.inicio())
+                && !blocoOrigem.fim().isAfter(candidato.fim());
     }
 
     private static void adicionarBlocosResiduais(
-            List<PedacoAlocado> alocadosNoBloco, Map<LocalDate, List<LinhaDia>> porDia) {
+            List<PedacoAlocado> alocadosNoBloco,
+            Duration duracaoMinimaResidual,
+            Map<LocalDate, List<LinhaDia>> porDia) {
         Bloco base = alocadosNoBloco.get(0).blocoOrigem();
         LocalTime cursor = base.inicio();
 
         for (PedacoAlocado alocado : alocadosNoBloco) {
             if (alocado.inicio().isAfter(cursor)) {
-                adicionarSeRelevante(base, cursor, alocado.inicio(), porDia);
+                adicionarSeRelevante(base, cursor, alocado.inicio(), duracaoMinimaResidual, porDia);
             }
             if (alocado.fim().isAfter(cursor)) {
                 cursor = alocado.fim();
             }
         }
         if (cursor.isBefore(base.fim())) {
-            adicionarSeRelevante(base, cursor, base.fim(), porDia);
+            adicionarSeRelevante(base, cursor, base.fim(), duracaoMinimaResidual, porDia);
         }
     }
 
     private static void adicionarSeRelevante(
-            Bloco base, LocalTime inicio, LocalTime fim, Map<LocalDate, List<LinhaDia>> porDia) {
-        if (Duration.between(inicio, fim).compareTo(Tarefa.TAMANHO_PEDACO_PADRAO) < 0) {
+            Bloco base,
+            LocalTime inicio,
+            LocalTime fim,
+            Duration duracaoMinimaResidual,
+            Map<LocalDate, List<LinhaDia>> porDia) {
+        if (Duration.between(inicio, fim).compareTo(duracaoMinimaResidual) < 0) {
             return;
         }
         Bloco residual = new Bloco(base.data(), inicio, fim, base.tipo(), base.descricao());
@@ -296,14 +351,9 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     private static void escreverChecklist(
             StringBuilder md,
             List<Bloco> blocosOrdenados,
-            List<PedacoAlocado> alocadosOrdenados,
-            boolean comPlanejamento) {
+            List<PedacoAlocado> alocadosOrdenados) {
         md.append(LF).append("## Checklist de estudos").append(LF);
-        if (comPlanejamento) {
-            if (alocadosOrdenados.isEmpty()) {
-                md.append("- Nenhum estudo alocado na semana.").append(LF);
-                return;
-            }
+        if (!alocadosOrdenados.isEmpty()) {
             for (PedacoAlocado alocado : alocadosOrdenados) {
                 md.append("- [ ] ")
                         .append(abreviacaoDia(alocado.data().getDayOfWeek()))

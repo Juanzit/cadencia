@@ -47,8 +47,13 @@ public class CadenciaConfig {
     }
 
     @Bean
-    BacklogRepository backlogRepository(Validator validator) {
-        return new YamlBacklogRepository(new ObjectMapper(new YAMLFactory()), validator);
+    BacklogRepository backlogRepository(
+            Validator validator,
+            @Value("${cadencia.pedaco-padrao-min:25}") long pedacoPadraoMin) {
+        return new YamlBacklogRepository(
+                new ObjectMapper(new YAMLFactory()),
+                validator,
+                Duration.ofMinutes(pedacoPadraoMin));
     }
 
     @Bean

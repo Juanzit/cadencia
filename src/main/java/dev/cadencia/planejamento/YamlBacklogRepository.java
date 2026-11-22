@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -27,10 +28,21 @@ public class YamlBacklogRepository implements BacklogRepository {
 
     private final ObjectMapper yamlMapper;
     private final Validator validator;
+    private final Duration tamanhoPedacoPadrao;
 
     public YamlBacklogRepository(ObjectMapper yamlMapper, Validator validator) {
+        this(yamlMapper, validator, Tarefa.TAMANHO_PEDACO_PADRAO);
+    }
+
+    public YamlBacklogRepository(
+            ObjectMapper yamlMapper, Validator validator, Duration tamanhoPedacoPadrao) {
         this.yamlMapper = Objects.requireNonNull(yamlMapper, "yamlMapper não pode ser nulo");
         this.validator = Objects.requireNonNull(validator, "validator não pode ser nulo");
+        this.tamanhoPedacoPadrao = Objects.requireNonNull(
+                tamanhoPedacoPadrao, "tamanhoPedacoPadrao não pode ser nulo");
+        if (tamanhoPedacoPadrao.isZero() || tamanhoPedacoPadrao.isNegative()) {
+            throw new IllegalArgumentException("tamanhoPedacoPadrao deve ser estritamente positivo");
+        }
     }
 
     @Override
@@ -38,7 +50,7 @@ public class YamlBacklogRepository implements BacklogRepository {
         Objects.requireNonNull(caminho, "caminho não pode ser nulo");
         BacklogDto dto = lerDto(caminho);
         validarDto(caminho, dto);
-        return dto.paraDominio();
+        return dto.paraDominio(tamanhoPedacoPadrao);
     }
 
     @Override

@@ -15,12 +15,12 @@ cadencia/
 │   ├── PRD.md · RULES.md · ARCHITECTURE.md · DESIGN.md · GEMINI.md
 │   └── tasks/                    # _1_TASKS_SETUP.md … _6_TASKS_PORTFOLIO.md
 ├── pom.xml
-├── exemplos/                     # agenda, backlog, turmas e feedback sintéticos (versionados)
+├── exemplos/                     # agenda.exemplo.yaml, backlog.exemplo.yaml, turmas e feedback sintéticos (versionados)
 ├── dados/                        # dados reais (.gitignore: dados/* e !dados/.gitkeep)
 └── src/
     ├── main/java/dev/cadencia/
     │   ├── CadenciaApplication.java  # ponto de entrada Spring Boot (SpringApplication.exit + System.exit)
-    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços (incl. planejamento) e propriedades cadencia.*
+    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e propriedades cadencia.* (`pedaco-padrao-min`, `folga-minima-min`)
     │   ├── cli/                  # CONTROLLER: comandos Picocli + integração Spring Boot
     │   │   ├── CadenciaCommand.java       # comando raiz sem efeitos colaterais em inicialização sem subcomando
     │   │   ├── PicocliCommandRunner.java  # CommandLineRunner + ExitCodeGenerator (exit codes 0/1/2 e --verbose)
@@ -35,7 +35,7 @@ cadencia/
     │   │   ├── DadosInvalidosException.java # erros de leitura, sintaxe YAML ou validação
     │   │   ├── IntervaloLivre.java       # janela livre diária [inicio, fim) com duracao() positiva
     │   │   ├── IntervaloOcupado.java     # fragmento diário ocupado [inicio, fim)
-    │   │   ├── SemanaPlanejada.java      # saída semanal imutável contendo inicioSemana, Semana ISO, intervalosOcupados e avisos
+    │   │   ├── SemanaPlanejada.java      # saída semanal imutável contendo inicioSemana, Semana ISO, intervalosOcupados, avisos e configuracao
     │   │   ├── TipoIntervaloOcupado.java # COMPROMISSO, MARGEM_ANTES, MARGEM_DEPOIS, DESLOCAMENTO_AUTOMATICO
     │   │   └── YamlAgendaRepository.java # adapter YAML (Jackson + Validator)
     │   ├── planejamento/         # módulo de alocação de estudos
@@ -43,11 +43,11 @@ cadencia/
     │   │   ├── BacklogRepository.java # porta de leitura do backlog de estudos (1.1)
     │   │   ├── PedacoAlocado.java     # alocação de um Pedaco (blocoOrigem, data, inicio, fim, pedaco) (1.3)
     │   │   ├── ResultadoAlocacao.java # saída imutável (alocados e naoAlocados) (1.3)
-    │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos) (1.1)
-    │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual e folga mínima configurável (1.4–1.5)
+    │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos + pedaco-padrao-min) (1.1, 1.8)
+    │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual e folga mínima configurável (1.4–1.5, ADR-013)
     │   │   └── strategies/
-    │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação (1.3)
-    │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3)
+    │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação (1.3, ADR-013)
+    │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3, ADR-013)
     │   │       └── ConfiabilidadeAlocadorStrategy.java
     │   ├── feedback/             # módulo de feedback e confiabilidade
     │   │   ├── FeedbackRepository.java
@@ -85,7 +85,7 @@ cadencia/
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
     │       └── Turma.java
-    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 4 regras)
+    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 4 regras)
 ```
 
 > `groupId` definido: `dev.cadencia` (Q4 decidida).
@@ -116,7 +116,7 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 
 | Interface | Implementações | Quando troca |
 | :--- | :--- | :--- |
-| `AlocadorStrategy` | `PrioridadeAlocadorStrategy` (Fase 3), `ConfiabilidadeAlocadorStrategy` (Fase 4) | Evoluir a heurística sem tocar no serviço |
+| `AlocadorStrategy` | `PrioridadeAlocadorStrategy` (Fase 3, `ADR-013`), `ConfiabilidadeAlocadorStrategy` (Fase 4) | Evoluir a heurística sem tocar no serviço |
 | `ExportadorStrategy` | `MarkdownSemanalExportador`; futuras: JSON, ICS (calendário) | Novos formatos de saída |
 | `GeradorTexto` | `OllamaGeradorTexto`, `FakeGeradorTexto` (testes) | Trocar de modelo ou provedor |
 

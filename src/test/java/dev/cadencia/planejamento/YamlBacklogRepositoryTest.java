@@ -1,6 +1,7 @@
 package dev.cadencia.planejamento;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -270,8 +271,42 @@ class YamlBacklogRepositoryTest {
     void deveValidarParametrosNulosNoConstrutorENoMetodoCarregar() {
         assertThatNullPointerException().isThrownBy(() -> new YamlBacklogRepository(null, validator));
         assertThatNullPointerException().isThrownBy(() -> new YamlBacklogRepository(yamlMapper, null));
+        assertThatNullPointerException()
+                .isThrownBy(() -> new YamlBacklogRepository(yamlMapper, validator, null));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new YamlBacklogRepository(yamlMapper, validator, Duration.ZERO));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new YamlBacklogRepository(yamlMapper, validator, Duration.ofMinutes(-5)));
         assertThatNullPointerException().isThrownBy(() -> repository.carregar(null));
         assertThatNullPointerException().isThrownBy(() -> repository.carregarSeExistir(null));
+    }
+
+    @Test
+    void deveAplicarTamanhoPedacoPadraoConfiguradoQuandoOmitidoNoYaml() throws IOException {
+        Path arquivo = tempDir.resolve("backlog-pedaco-configurado.yaml");
+        Files.writeString(arquivo, """
+                tarefas:
+                  - id: "sem-pedaco"
+                    titulo: "Sem tamanho explícito"
+                    duracao_total_min: 120
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "com-pedaco"
+                    titulo: "Com tamanho explícito"
+                    duracao_total_min: 60
+                    tipos_aceitos: [INTERROMPIVEL]
+                    tamanho_pedaco_min: 15
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        BacklogRepository repoPedaco40 = new YamlBacklogRepository(
+                yamlMapper, validator, Duration.ofMinutes(40));
+        List<Tarefa> tarefas = repoPedaco40.carregar(arquivo);
+
+        assertThat(tarefas).hasSize(2);
+        assertThat(tarefas.get(0).tamanhoPedaco()).isEqualTo(Duration.ofMinutes(40));
+        assertThat(tarefas.get(0).dividirEmPedacos()).hasSize(3);
+        assertThat(tarefas.get(1).tamanhoPedaco()).isEqualTo(Duration.ofMinutes(15));
     }
 
     @Test

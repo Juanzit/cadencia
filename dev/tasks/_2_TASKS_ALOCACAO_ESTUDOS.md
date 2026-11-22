@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 6 (75%)
+* **Concluídas:** 8 (100%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 2 (25%)
+* **Pendentes:** 0 (0%)
 
 ---
 
@@ -28,12 +28,14 @@
 | 1.4 | Garantir compatibilidade: um pedaço só entra em bloco cujo tipo esteja na lista `aceita` da tarefa (ex.: Spring Boot novo nunca em `VIGILANCIA`) | Service | Crítica | 🟢 Concluído |
 | 1.5 | Implementar folga mínima configurável entre blocos de estudo e treino/aulas, para absorver imprevistos | Service | Alta | 🟢 Concluído |
 | 1.6 | Estender o exportador para incluir "Checklist de estudos" e a coluna de blocos com a tarefa e o pedaço (ex.: `Java Collections (2/6)`) | Exportação | Alta | 🟢 Concluído |
-| 1.7 | Escrever testes: backlog vazio, tarefa maior que todos os blocos, nenhum bloco compatível, prioridades iguais, pedaço final menor | Testes | Crítica | 🔴 Não Iniciado |
-| 1.8 | Criar `exemplos/backlog.exemplo.yaml` (roadmap Backend Java: Java core, Collections, Spring Boot, JPA, testes, SQL), atualizar README e registrar ADR da heurística no `@dev/GEMINI.md` | Documentação | Média | 🔴 Não Iniciado |
+| 1.7 | Escrever testes: backlog vazio, tarefa maior que todos os blocos, nenhum bloco compatível, prioridades iguais, pedaço final menor | Testes | Crítica | 🟢 Concluído |
+| 1.8 | Criar `exemplos/backlog.exemplo.yaml` (roadmap Backend Java: Java core, Collections, Spring Boot, JPA, testes, SQL), atualizar README e registrar ADR da heurística no `@dev/GEMINI.md` | Documentação | Média | 🟢 Concluído |
 
 ### ✅ Gate 4 — Estudos Alocados
-- [ ] Nenhuma tarefa aparece em bloco de tipo incompatível
-- [ ] Todos os pedaços respeitam o tamanho configurado
-- [ ] Folga mínima respeitada entre blocos
-- [ ] Teste real: o plano de uma semana sua não exige pesquisar o que estudar
-- [ ] Cobertura ≥ 80% em `planejamento`
+- [x] Nenhuma tarefa aparece em bloco de tipo incompatível
+- [x] Todos os pedaços respeitam o tamanho configurado
+- [x] Folga mínima respeitada entre blocos
+- [x] Teste real: o plano de uma semana sua não exige pesquisar o que estudar
+- [x] Cobertura ≥ 80% em `planejamento`
+
+> **Gate 4 — Alocação de Estudos aprovado (Marco 2 — v0.2).** Avance para a Fase 4 em `dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md`.

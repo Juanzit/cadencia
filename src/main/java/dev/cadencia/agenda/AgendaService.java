@@ -164,7 +164,8 @@ public class AgendaService {
                 inicioSemana.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR),
                 compromissosOrdenados,
                 blocos);
-        return new SemanaPlanejada(inicioSemana, semana, expansao.intervalosOcupadosSemPlantao(), avisos);
+        return new SemanaPlanejada(
+                inicioSemana, semana, expansao.intervalosOcupadosSemPlantao(), avisos, configuracao);
     }
 
     private LocalDate dataAtualDoRelogio() {

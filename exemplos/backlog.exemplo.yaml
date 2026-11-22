@@ -1,0 +1,63 @@
+# Backlog de estudos sintético de exemplo (Cadência)
+# Roadmap de Backend Java para demonstração e testes determinísticos de alocação.
+# Seu backlog pessoal deve ficar em dados/backlog.yaml (ignorado pelo Git).
+
+tarefas:
+  # Prioridade 1 (empate intencional: preserva a ordem declarada no roadmap)
+  - id: "java-core"
+    titulo: "Java Core: Streams, Lambdas e Records"
+    duracao_total_min: 100
+    tipos_aceitos:
+      - PROFUNDO
+    prioridade: 1
+
+  - id: "java-collections"
+    titulo: "Java Collections e Complexidade"
+    duracao_total_min: 140
+    tipos_aceitos:
+      - PROFUNDO
+    prioridade: 1
+
+  # Prioridade 2 (blocos profundos com pedaços inteiros)
+  - id: "spring-boot-web"
+    titulo: "Spring Boot: Web, Validação e Arquitetura"
+    duracao_total_min: 150
+    tipos_aceitos:
+      - PROFUNDO
+    tamanho_pedaco_min: 25
+    prioridade: 2
+
+  # Prioridade 3 (empate intencional; mistura pedaço customizado parcial e compatibilidade múltipla)
+  - id: "jpa-hibernate"
+    titulo: "JPA e Hibernate: Mapeamento e Consultas"
+    duracao_total_min: 115
+    tipos_aceitos:
+      - PROFUNDO
+    tamanho_pedaco_min: 30
+    prioridade: 3
+
+  - id: "testes-junit-mockito"
+    titulo: "Testes com JUnit 5, AssertJ e Mockito"
+    duracao_total_min: 90
+    tipos_aceitos:
+      - PROFUNDO
+      - INTERROMPIVEL
+    prioridade: 3
+
+  # Prioridades 4 e 5 (blocos interrompíveis e janela de plantão/vigilância)
+  - id: "sql-postgresql"
+    titulo: "SQL e Modelagem Relacional"
+    duracao_total_min: 65
+    tipos_aceitos:
+      - INTERROMPIVEL
+      - VIGILANCIA
+    prioridade: 4
+
+  - id: "flashcards-revisao"
+    titulo: "Flashcards e Revisão Leve de Conceitos Java"
+    duracao_total_min: 60
+    tipos_aceitos:
+      - INTERROMPIVEL
+      - VIGILANCIA
+    tamanho_pedaco_min: 20
+    prioridade: 5

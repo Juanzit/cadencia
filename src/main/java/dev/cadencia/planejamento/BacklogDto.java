@@ -36,11 +36,20 @@ public record BacklogDto(
 
     /**
      * Converte o DTO já validado em uma lista imutável de {@link Tarefa}s preservando a ordem do
-     * roadmap.
+     * roadmap e adotando {@link Tarefa#TAMANHO_PEDACO_PADRAO} quando {@code tamanho_pedaco_min} é nulo.
      */
     public List<Tarefa> paraDominio() {
+        return paraDominio(Tarefa.TAMANHO_PEDACO_PADRAO);
+    }
+
+    /**
+     * Converte o DTO já validado em uma lista imutável de {@link Tarefa}s preservando a ordem do
+     * roadmap e aplicando {@code tamanhoPedacoPadrao} quando {@code tamanho_pedaco_min} não é informado.
+     */
+    public List<Tarefa> paraDominio(Duration tamanhoPedacoPadrao) {
+        java.util.Objects.requireNonNull(tamanhoPedacoPadrao, "tamanhoPedacoPadrao não pode ser nulo");
         return tarefas.stream()
-                .map(TarefaDto::paraDominio)
+                .map(tarefa -> tarefa.paraDominio(tamanhoPedacoPadrao))
                 .toList();
     }
 
@@ -77,13 +86,13 @@ public record BacklogDto(
             @JsonProperty("prioridade")
             Integer prioridade) {
 
-        Tarefa paraDominio() {
+        Tarefa paraDominio(Duration tamanhoPedacoPadrao) {
             List<TipoBloco> tipos = tiposAceitos.stream()
                     .map(TipoBloco::valueOf)
                     .toList();
             Duration tamanhoPedaco = tamanhoPedacoMin != null
                     ? Duration.ofMinutes(tamanhoPedacoMin)
-                    : Tarefa.TAMANHO_PEDACO_PADRAO;
+                    : tamanhoPedacoPadrao;
             return new Tarefa(
                     id.trim(),
                     titulo.trim(),
