@@ -89,11 +89,13 @@ cadencia/
     │       ├── Margens.java
     │       ├── Pedaco.java
     │       ├── PeriodoDia.java
+    │       ├── PrevisaoTransicao.java
     │       ├── Semana.java
     │       ├── StatusBloco.java
     │       ├── Tarefa.java
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
+    │       ├── TipoEventoTurma.java
     │       └── Turma.java
     └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest, FeedbackConfiabilidadeCasosDeBordaTest, ConfiabilidadeServiceTest, ConfiabilidadeAlocadorStrategyTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 5 regras, incluindo planejamento -> feedback proibido)
 ```
@@ -124,7 +126,9 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 * `ConfiabilidadeFaixa`: record imutável de 5 componentes (`faixa`, `amostras`, `indice`, `amostrasSuficientes`, `baixaConfiabilidade`), garantindo consistência (`baixaConfiabilidade` só pode ser `true` quando `amostrasSuficientes` for `true`).
 * `ItemFeedback`: registro imutável por dia/horário (com `fim` opcional e nota normalizada `"parei aqui"`), status e derivação de `FaixaHorario`.
 * `FeedbackSemanal`: feedback consolidado de uma semana ISO (`ano >= 2000`, `1 <= numeroIso <= 53`, listas imutáveis de itens e notas gerais).
-* `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas.
+* `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas, cálculo de fim/transição prevista e avaliação semanal (`eventoNaSemana`).
+* `TipoEventoTurma`: classificação de marcos semanais (`ENCERRAMENTO_MODULO`, `TRANSICAO_PREVISTA`).
+* `PrevisaoTransicao`: evento previsto de encerramento ou transição vinculado a uma `Turma`, semana ISO e data de referência.
 * `Semana`: ano, número ISO, lista de compromissos e blocos.
 
 ## 4. Strategy Pattern (pontos de extensão)
