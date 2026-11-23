@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 7
-* **Concluídas:** 1 (14%)
+* **Concluídas:** 2 (29%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 6 (86%)
+* **Pendentes:** 5 (71%)
 
 ---
 
@@ -22,7 +22,7 @@
 
 | # | Tarefa | Camada / Área | Prioridade | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| 1.1 | Implementar `TurmaDto`, `TurmaRepository` e `CsvTurmaRepository` lendo `turmas.csv` (turma, empresa, módulo atual, início do módulo, duração em semanas) com validação linha a linha | Repository / DTO | Crítica | 🔴 Não Iniciado |
+| 1.1 | Implementar `TurmaDto`, `TurmaRepository` e `CsvTurmaRepository` lendo `turmas.csv` (turma, empresa, módulo atual, início do módulo, duração em semanas) com validação linha a linha | Repository / DTO | Crítica | 🟢 Concluído |
 | 1.2 | Implementar `Turma` no domínio com cálculo do fim do módulo e do módulo seguinte | Domain | Crítica | 🟢 Concluído |
 | 1.3 | Implementar `PrevisaoTurmaService`: marcar a **semana de transição** como possível semana livre, sinalizando que é previsão e não certeza | Service | Crítica | 🔴 Não Iniciado |
 | 1.4 | Integrar a previsão ao plano semanal: seção "Turmas em transição" e aviso nas semanas afetadas | Exportação | Alta | 🔴 Não Iniciado |

@@ -58,9 +58,10 @@ cadencia/
     │   │   ├── ModeloFeedbackGerado.java        # resultado imutável da geração do arquivo modelo de feedback (1.3)
     │   │   └── ConfiabilidadeService.java       # `calcularPorFaixa` por faixa sobre janela de N semanas com mínimo de amostras e limite configurável (1.5)
     │   ├── turmas/               # módulo de turmas e previsão
-    │   │   ├── TurmaRepository.java
-    │   │   ├── CsvTurmaRepository.java
-    │   │   └── PrevisaoTurmaService.java
+    │   │   ├── CsvTurmaRepository.java # adapter CSV UTF-8 com validação linha a linha e códigos únicos (1.1)
+    │   │   ├── PrevisaoTurmaService.java
+    │   │   ├── TurmaDto.java           # DTO CSV por linha com Bean Validation (1.1)
+    │   │   └── TurmaRepository.java    # porta de leitura do cadastro de turmas (1.1)
     │   ├── ia/                   # módulo de IA local (Fase 6)
     │   │   ├── GeradorTexto.java
     │   │   ├── OllamaGeradorTexto.java
