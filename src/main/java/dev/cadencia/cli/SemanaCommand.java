@@ -1,6 +1,5 @@
 package dev.cadencia.cli;
 
-import dev.cadencia.agenda.DadosInvalidosException;
 import dev.cadencia.dominio.Semana;
 import dev.cadencia.exportacao.PlanoSemanalGerado;
 import dev.cadencia.exportacao.PlanoSemanalService;
@@ -8,7 +7,6 @@ import dev.cadencia.planejamento.ResultadoAlocacao;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -32,8 +30,6 @@ import picocli.CommandLine.Spec;
         mixinStandardHelpOptions = true,
         description = "Gera o plano semanal Markdown da semana ISO de referência.")
 public class SemanaCommand implements Callable<Integer> {
-
-    private static final String PADRAO_DATA_ISO = "\\d{4}-\\d{2}-\\d{2}";
 
     private final PlanoSemanalService planoSemanalService;
 
@@ -65,15 +61,9 @@ public class SemanaCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        LocalDate dataReferencia = dataTexto != null ? interpretarData(dataTexto) : null;
-        if (caminhoAgenda != null && caminhoAgenda.toString().isBlank()) {
-            throw new DadosInvalidosException(
-                    "Caminho inválido para --agenda: informe o caminho de um arquivo YAML válido.");
-        }
-        if (caminhoBacklog != null && caminhoBacklog.toString().isBlank()) {
-            throw new DadosInvalidosException(
-                    "Caminho inválido para --backlog: informe o caminho de um arquivo YAML válido.");
-        }
+        LocalDate dataReferencia = dataTexto != null ? CliValidacoes.interpretarData(dataTexto) : null;
+        CliValidacoes.validarCaminhoNaoEmBranco(caminhoAgenda, "--agenda");
+        CliValidacoes.validarCaminhoNaoEmBranco(caminhoBacklog, "--backlog");
 
         PlanoSemanalGerado resultado = planoSemanalService.gerarEExportar(
                 caminhoAgenda, caminhoBacklog, dataReferencia);
@@ -110,21 +100,5 @@ public class SemanaCommand implements Callable<Integer> {
         }
         out.flush();
         return CommandLine.ExitCode.OK;
-    }
-
-    private static LocalDate interpretarData(String valor) {
-        String limpo = valor.trim();
-        if (!limpo.matches(PADRAO_DATA_ISO)) {
-            throw new DadosInvalidosException(String.format(
-                    "Data inválida para --data: \"%s\". Use o formato AAAA-MM-DD (ex.: 2026-11-23).",
-                    valor));
-        }
-        try {
-            return LocalDate.parse(limpo);
-        } catch (DateTimeParseException ex) {
-            throw new DadosInvalidosException(String.format(
-                    "Data inválida para --data: \"%s\". Informe uma data existente no calendário no formato AAAA-MM-DD.",
-                    valor), ex);
-        }
     }
 }

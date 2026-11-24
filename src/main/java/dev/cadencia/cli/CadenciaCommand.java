@@ -24,7 +24,7 @@ import picocli.CommandLine.Spec;
         mixinStandardHelpOptions = true,
         version = "0.1.0-SNAPSHOT",
         description = "Planejador semanal local para organizar estudos e rotina.",
-        subcommands = {SemanaCommand.class})
+        subcommands = {SemanaCommand.class, FeedbackCommand.class})
 public class CadenciaCommand implements Callable<Integer> {
 
     @Option(

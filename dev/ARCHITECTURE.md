@@ -22,7 +22,9 @@ cadencia/
     │   ├── CadenciaApplication.java  # ponto de entrada Spring Boot (SpringApplication.exit + System.exit)
     │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e propriedades cadencia.* (`pedaco-padrao-min`, `folga-minima-min`)
     │   ├── cli/                  # CONTROLLER: comandos Picocli + integração Spring Boot
-    │   │   ├── CadenciaCommand.java       # comando raiz sem efeitos colaterais em inicialização sem subcomando
+    │   │   ├── CadenciaCommand.java       # comando raiz (`semana`, `feedback`) sem efeitos colaterais sem subcomando
+    │   │   ├── CliValidacoes.java         # validação compartilhada de `--data`, `--agenda` e `--backlog`
+    │   │   ├── FeedbackCommand.java       # subcomando `feedback --modelo` com `--sobrescrever` e saída via FeedbackService (1.3)
     │   │   ├── PicocliCommandRunner.java  # CommandLineRunner + ExitCodeGenerator (exit codes 0/1/2 e --verbose)
     │   │   ├── PicocliSpringFactory.java  # CommandLine.IFactory integrado ao ApplicationContext
     │   │   └── SemanaCommand.java         # subcomando semana [--data AAAA-MM-DD] [--agenda caminho] [--backlog caminho] (1.6)
@@ -50,8 +52,10 @@ cadencia/
     │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3, ADR-013)
     │   │       └── ConfiabilidadeAlocadorStrategy.java
     │   ├── feedback/             # módulo de feedback e confiabilidade
-    │   │   ├── FeedbackRepository.java          # porta de leitura, histórico cronológico e gravação de feedback semanal (1.1)
-    │   │   ├── MarkdownFeedbackRepository.java  # parser tolerante (HH:mm e HH:mm–HH:mm) e escrita UTF-8 LF idempotente (1.1)
+    │   │   ├── FeedbackRepository.java          # porta de existência, leitura, histórico cronológico e gravação de feedback (1.1, 1.3)
+    │   │   ├── FeedbackService.java             # gera modelo `feedback/AAAA-Wnn.md` reutilizando agenda/backlog e protegendo contra sobrescrita (1.3)
+    │   │   ├── MarkdownFeedbackRepository.java  # parser tolerante (HH:mm e HH:mm–HH:mm) e escrita UTF-8 LF idempotente (1.1, 1.3)
+    │   │   ├── ModeloFeedbackGerado.java        # resultado imutável da geração do arquivo modelo de feedback (1.3)
     │   │   └── ConfiabilidadeService.java
     │   ├── turmas/               # módulo de turmas e previsão
     │   │   ├── TurmaRepository.java

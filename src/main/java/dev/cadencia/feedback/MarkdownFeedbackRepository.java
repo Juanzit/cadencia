@@ -71,6 +71,12 @@ public class MarkdownFeedbackRepository implements FeedbackRepository {
             "dom", DayOfWeek.SUNDAY);
 
     @Override
+    public boolean existe(Path caminho) {
+        Objects.requireNonNull(caminho, "caminho não pode ser nulo");
+        return Files.exists(caminho);
+    }
+
+    @Override
     public FeedbackSemanal carregar(Path caminho) {
         Objects.requireNonNull(caminho, "caminho não pode ser nulo");
         List<String> linhas = lerLinhasUtf8(caminho);

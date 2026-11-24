@@ -12,6 +12,11 @@ import java.util.Optional;
 public interface FeedbackRepository {
 
     /**
+     * Verifica se já existe um arquivo de feedback no caminho informado.
+     */
+    boolean existe(Path caminho);
+
+    /**
      * Carrega e valida o feedback semanal do arquivo informado, lançando erro detalhado por linha
      * caso o arquivo esteja ausente, ilegível, vazio ou fora do formato esperado.
      */

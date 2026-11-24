@@ -307,6 +307,8 @@ class SemanaCommandIntegrationTest {
         GenericApplicationContext contextoComFalha = new GenericApplicationContext();
         contextoComFalha.registerBean(CadenciaCommand.class, CadenciaCommand::new);
         contextoComFalha.registerBean(SemanaCommand.class, () -> new SemanaCommand(servicoQueFalha));
+        contextoComFalha.registerBean(
+                FeedbackCommand.class, () -> applicationContext.getBean(FeedbackCommand.class));
         contextoComFalha.refresh();
 
         PicocliCommandRunner runnerComFalha = new PicocliCommandRunner(new PicocliSpringFactory(contextoComFalha));

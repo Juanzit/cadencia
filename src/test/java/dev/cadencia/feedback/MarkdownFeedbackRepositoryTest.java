@@ -408,7 +408,9 @@ class MarkdownFeedbackRepositoryTest {
     @Test
     void deveImplementarCarregarSeExistirEListarHistoricoEmOrdemCronologica() throws IOException {
         Path feedbackDir = tempDir.resolve("feedback");
-        assertThat(repository.carregarSeExistir(feedbackDir.resolve("2026-W48.md"))).isEmpty();
+        Path arquivoW48 = feedbackDir.resolve("2026-W48.md");
+        assertThat(repository.existe(arquivoW48)).isFalse();
+        assertThat(repository.carregarSeExistir(arquivoW48)).isEmpty();
         assertThat(repository.listarHistorico(feedbackDir)).isEmpty();
 
         Path arquivoComoDiretorio = tempDir.resolve("nao-diretorio.md");
@@ -441,6 +443,7 @@ class MarkdownFeedbackRepositoryTest {
                 feedbackDir.resolve("2026-W02.md"),
                 new FeedbackSemanal(2026, 2, List.of(), List.of()));
 
+        assertThat(repository.existe(feedbackDir.resolve("2026-W49.md"))).isTrue();
         assertThat(repository.carregarSeExistir(feedbackDir.resolve("2026-W49.md")))
                 .isPresent()
                 .get()
@@ -468,6 +471,7 @@ class MarkdownFeedbackRepositoryTest {
 
     @Test
     void deveValidarParametrosNulosEPropagarFalhaDeGravacao() throws IOException {
+        assertThatNullPointerException().isThrownBy(() -> repository.existe(null));
         assertThatNullPointerException().isThrownBy(() -> repository.carregar(null));
         assertThatNullPointerException().isThrownBy(() -> repository.carregarSeExistir(null));
         assertThatNullPointerException().isThrownBy(() -> repository.listarHistorico(null));

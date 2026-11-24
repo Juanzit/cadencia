@@ -10,6 +10,9 @@ import dev.cadencia.exportacao.PlanoSemanalRepository;
 import dev.cadencia.exportacao.PlanoSemanalService;
 import dev.cadencia.exportacao.strategies.ExportadorStrategy;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.feedback.FeedbackRepository;
+import dev.cadencia.feedback.FeedbackService;
+import dev.cadencia.feedback.MarkdownFeedbackRepository;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.YamlBacklogRepository;
@@ -92,6 +95,26 @@ public class CadenciaConfig {
                 planejamentoService,
                 exportadorStrategy,
                 planoSemanalRepository,
+                diretorioDados);
+    }
+
+    @Bean
+    FeedbackRepository feedbackRepository() {
+        return new MarkdownFeedbackRepository();
+    }
+
+    @Bean
+    FeedbackService feedbackService(
+            AgendaService agendaService,
+            BacklogRepository backlogRepository,
+            PlanejamentoService planejamentoService,
+            FeedbackRepository feedbackRepository,
+            @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados) {
+        return new FeedbackService(
+                agendaService,
+                backlogRepository,
+                planejamentoService,
+                feedbackRepository,
                 diretorioDados);
     }
 }
