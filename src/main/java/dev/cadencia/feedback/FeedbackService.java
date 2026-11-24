@@ -4,6 +4,8 @@ import dev.cadencia.agenda.AgendaService;
 import dev.cadencia.agenda.DadosInvalidosException;
 import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.ConfiabilidadeFaixa;
+import dev.cadencia.dominio.FaixaHorario;
 import dev.cadencia.dominio.FeedbackSemanal;
 import dev.cadencia.dominio.ItemFeedback;
 import dev.cadencia.dominio.Pedaco;
@@ -52,10 +54,6 @@ public class FeedbackService {
             .thenComparing(Bloco::tipo)
             .thenComparing(Bloco::descricao, Comparator.nullsFirst(String::compareTo));
 
-    private static final Comparator<FeedbackSemanal> ORDEM_HISTORICO = Comparator
-            .comparingInt(FeedbackSemanal::ano)
-            .thenComparingInt(FeedbackSemanal::numeroIso);
-
     private static final Comparator<ItemFeedback> ORDEM_ITENS_FEEDBACK = Comparator
             .comparingInt((ItemFeedback item) -> item.diaSemana().getValue())
             .thenComparing(ItemFeedback::inicio)
@@ -65,18 +63,20 @@ public class FeedbackService {
     private final BacklogRepository backlogRepository;
     private final PlanejamentoService planejamentoService;
     private final FeedbackRepository feedbackRepository;
+    private final ConfiabilidadeService confiabilidadeService;
     private final Path diretorioDados;
 
     public FeedbackService(
             AgendaService agendaService,
             FeedbackRepository feedbackRepository,
             Path diretorioDados) {
-        this.agendaService = Objects.requireNonNull(agendaService, "agendaService não pode ser nulo");
-        this.backlogRepository = null;
-        this.planejamentoService = null;
-        this.feedbackRepository = Objects.requireNonNull(
-                feedbackRepository, "feedbackRepository não pode ser nulo");
-        this.diretorioDados = validarENormalizarDiretorio(diretorioDados);
+        this(
+                validarENormalizarDiretorio(diretorioDados),
+                Objects.requireNonNull(agendaService, "agendaService não pode ser nulo"),
+                null,
+                null,
+                Objects.requireNonNull(feedbackRepository, "feedbackRepository não pode ser nulo"),
+                null);
     }
 
     public FeedbackService(
@@ -85,14 +85,44 @@ public class FeedbackService {
             PlanejamentoService planejamentoService,
             FeedbackRepository feedbackRepository,
             Path diretorioDados) {
-        this.agendaService = Objects.requireNonNull(agendaService, "agendaService não pode ser nulo");
-        this.backlogRepository = Objects.requireNonNull(
-                backlogRepository, "backlogRepository não pode ser nulo");
-        this.planejamentoService = Objects.requireNonNull(
-                planejamentoService, "planejamentoService não pode ser nulo");
-        this.feedbackRepository = Objects.requireNonNull(
-                feedbackRepository, "feedbackRepository não pode ser nulo");
-        this.diretorioDados = validarENormalizarDiretorio(diretorioDados);
+        this(
+                validarENormalizarDiretorio(diretorioDados),
+                Objects.requireNonNull(agendaService, "agendaService não pode ser nulo"),
+                Objects.requireNonNull(backlogRepository, "backlogRepository não pode ser nulo"),
+                Objects.requireNonNull(planejamentoService, "planejamentoService não pode ser nulo"),
+                Objects.requireNonNull(feedbackRepository, "feedbackRepository não pode ser nulo"),
+                null);
+    }
+
+    public FeedbackService(
+            AgendaService agendaService,
+            BacklogRepository backlogRepository,
+            PlanejamentoService planejamentoService,
+            FeedbackRepository feedbackRepository,
+            ConfiabilidadeService confiabilidadeService,
+            Path diretorioDados) {
+        this(
+                validarENormalizarDiretorio(diretorioDados),
+                Objects.requireNonNull(agendaService, "agendaService não pode ser nulo"),
+                Objects.requireNonNull(backlogRepository, "backlogRepository não pode ser nulo"),
+                Objects.requireNonNull(planejamentoService, "planejamentoService não pode ser nulo"),
+                Objects.requireNonNull(feedbackRepository, "feedbackRepository não pode ser nulo"),
+                Objects.requireNonNull(confiabilidadeService, "confiabilidadeService não pode ser nulo"));
+    }
+
+    private FeedbackService(
+            Path diretorioDadosNormalizado,
+            AgendaService agendaService,
+            BacklogRepository backlogRepository,
+            PlanejamentoService planejamentoService,
+            FeedbackRepository feedbackRepository,
+            ConfiabilidadeService confiabilidadeService) {
+        this.diretorioDados = diretorioDadosNormalizado;
+        this.agendaService = agendaService;
+        this.backlogRepository = backlogRepository;
+        this.planejamentoService = planejamentoService;
+        this.feedbackRepository = feedbackRepository;
+        this.confiabilidadeService = confiabilidadeService;
     }
 
     /**
@@ -122,9 +152,7 @@ public class FeedbackService {
                 : agendaService.gerarSemana(agendaEfetiva);
 
         List<Tarefa> tarefasBacklog = carregarBacklogOpcionalOuExplicito(caminhoBacklog);
-        ResultadoAlocacao resultadoAlocacao = tarefasBacklog != null
-                ? planejamentoService.alocar(semanaPlanejada, tarefasBacklog)
-                : null;
+        ResultadoAlocacao resultadoAlocacao = alocarSeHouverBacklog(semanaPlanejada, tarefasBacklog);
 
         Path destino = resolverArquivoFeedback(semanaPlanejada.semana());
         if (!sobrescrever && feedbackRepository.existe(destino)) {
@@ -142,6 +170,19 @@ public class FeedbackService {
                 List.of());
         Path arquivoSalvo = feedbackRepository.salvar(destino, modelo);
         return new ModeloFeedbackGerado(arquivoSalvo, modelo, semanaPlanejada, resultadoAlocacao);
+    }
+
+    private ResultadoAlocacao alocarSeHouverBacklog(
+            SemanaPlanejada semanaPlanejada, List<Tarefa> tarefasBacklog) {
+        if (tarefasBacklog == null) {
+            return null;
+        }
+        if (confiabilidadeService != null) {
+            Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidades =
+                    confiabilidadeService.calcularPorFaixa(semanaPlanejada.semana());
+            return planejamentoService.alocar(semanaPlanejada, tarefasBacklog, confiabilidades);
+        }
+        return planejamentoService.alocar(semanaPlanejada, tarefasBacklog);
     }
 
     /**
@@ -170,8 +211,8 @@ public class FeedbackService {
 
         List<FeedbackSemanal> copiaHistorico = List.copyOf(historico);
         List<FeedbackSemanal> semanasAnteriores = copiaHistorico.stream()
-                .filter(feedback -> ehSemanaAnterior(feedback, semanaAlvo))
-                .sorted(ORDEM_HISTORICO)
+                .filter(feedback -> feedback.ehAnteriorA(semanaAlvo))
+                .sorted(FeedbackSemanal.ORDEM_CRONOLOGICA)
                 .toList();
 
         Map<String, String> notasVigentes = new LinkedHashMap<>();
@@ -188,11 +229,6 @@ public class FeedbackService {
             }
         }
         return Collections.unmodifiableMap(notasVigentes);
-    }
-
-    private static boolean ehSemanaAnterior(FeedbackSemanal feedback, Semana semanaAlvo) {
-        return feedback.ano() < semanaAlvo.ano()
-                || (feedback.ano() == semanaAlvo.ano() && feedback.numeroIso() < semanaAlvo.numeroIso());
     }
 
     private List<Tarefa> carregarBacklogOpcionalOuExplicito(Path caminhoBacklog) {

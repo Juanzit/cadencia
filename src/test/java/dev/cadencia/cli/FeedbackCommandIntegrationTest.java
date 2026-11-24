@@ -19,6 +19,7 @@ import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
@@ -54,10 +55,19 @@ class FeedbackCommandIntegrationTest {
 
     @AfterAll
     static void limparDiretorioTemporario() throws IOException {
-        if (diretorioDadosTemporario == null || !Files.exists(diretorioDadosTemporario)) {
+        apagarArvore(diretorioDadosTemporario);
+    }
+
+    @BeforeEach
+    void limparFeedbacksEntreTestes() throws IOException {
+        apagarArvore(diretorioDadosTemporario.resolve("feedback"));
+    }
+
+    private static void apagarArvore(Path raiz) throws IOException {
+        if (raiz == null || !Files.exists(raiz)) {
             return;
         }
-        try (Stream<Path> caminhos = Files.walk(diretorioDadosTemporario)) {
+        try (Stream<Path> caminhos = Files.walk(raiz)) {
             for (Path caminho : caminhos.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(caminho);
             }

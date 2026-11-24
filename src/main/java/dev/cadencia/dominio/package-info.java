@@ -2,7 +2,8 @@
  * Núcleo puro de domínio do Cadência, composto por {@code record}s imutáveis e invariantes sem
  * efeitos colaterais ({@code Compromisso}, {@code Bloco}, {@code TipoBloco}, {@code Tarefa},
  * {@code Pedaco}, {@code StatusBloco}, {@code PeriodoDia}, {@code FaixaHorario},
- * {@code ItemFeedback}, {@code FeedbackSemanal}, {@code Turma}, {@code Semana}).
+ * {@code ConfiabilidadeFaixa}, {@code ItemFeedback}, {@code FeedbackSemanal}, {@code Turma},
+ * {@code Semana}).
  *
  * <p><b>Isolamento estrito:</b> é proibido depender de Spring ({@code org.springframework..}),
  * Jackson ({@code com.fasterxml.jackson..}) ou APIs de I/O ({@code java.io..},

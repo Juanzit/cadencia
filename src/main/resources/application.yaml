@@ -9,3 +9,7 @@ cadencia:
   fuso: America/Sao_Paulo
   pedaco-padrao-min: 25
   folga-minima-min: 10
+  confiabilidade:
+    janela-semanas: 4
+    minimo-amostras: 3
+    limite-confiabilidade: 0.50

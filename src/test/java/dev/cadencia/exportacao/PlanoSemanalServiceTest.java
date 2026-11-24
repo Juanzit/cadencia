@@ -14,12 +14,14 @@ import dev.cadencia.dominio.FeedbackSemanal;
 import dev.cadencia.dominio.ItemFeedback;
 import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.feedback.ConfiabilidadeService;
 import dev.cadencia.feedback.FeedbackRepository;
 import dev.cadencia.feedback.FeedbackService;
 import dev.cadencia.feedback.MarkdownFeedbackRepository;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.YamlBacklogRepository;
+import dev.cadencia.planejamento.strategies.ConfiabilidadeAlocadorStrategy;
 import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
@@ -281,6 +283,143 @@ class PlanoSemanalServiceTest {
                     - [ ] seg 07:50–08:15 · Java Collections (3/3)
                     """);
             assertThat(markdown.split("— retomar:", -1)).hasSize(2);
+        }
+    }
+
+    @Test
+    void deveUsarConfiabilidadeNaAlocacaoEEmitirAvisoApenasParaFaixasProfundasPresentesNaSemana()
+            throws IOException {
+        Path dadosTemp = tempDir.resolve("dados-confiabilidade");
+        Files.createDirectories(dadosTemp);
+        Files.writeString(dadosTemp.resolve("agenda.yaml"), """
+                jornada:
+                  inicio: "07:00"
+                  fim: "15:00"
+                margens:
+                  deslocamento_entre_locais_min: 0
+                  por_empresa: {}
+                classificacao:
+                  profundo_minimo_min: 90
+                  interrompivel_minimo_min: 25
+                compromissos:
+                  - dia: SEGUNDA
+                    inicio: "09:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Alinhamento"
+                  - dia: TERCA
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUARTA
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUINTA
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SEXTA
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SABADO
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: DOMINGO
+                    inicio: "07:00"
+                    fim: "15:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                """, StandardCharsets.UTF_8);
+        Files.writeString(dadosTemp.resolve("backlog.yaml"), """
+                tarefas:
+                  - id: "core"
+                    titulo: "Java Core"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "junit"
+                    titulo: "Testes JUnit"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO, INTERROMPIVEL]
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        FeedbackRepository feedbackRepo = new MarkdownFeedbackRepository();
+        // seg MANHA (3 amostras -> 0.0 -> baixa, tem bloco PROFUNDO na semana -> gera aviso)
+        // ter NOITE (3 amostras -> 0.0 -> baixa, NAO tem bloco PROFUNDO na semana -> sem aviso)
+        for (int iso = 45; iso <= 47; iso++) {
+            feedbackRepo.salvar(
+                    dadosTemp.resolve("feedback/2026-W" + iso + ".md"),
+                    new FeedbackSemanal(
+                            2026,
+                            iso,
+                            List.of(
+                                    new ItemFeedback(
+                                            DayOfWeek.MONDAY,
+                                            LocalTime.of(7, 0),
+                                            LocalTime.of(7, 25),
+                                            "Java",
+                                            StatusBloco.NAO_ACONTECEU,
+                                            null),
+                                    new ItemFeedback(
+                                            DayOfWeek.TUESDAY,
+                                            LocalTime.of(20, 0),
+                                            LocalTime.of(20, 25),
+                                            "Spring",
+                                            StatusBloco.NAO_ACONTECEU,
+                                            null)),
+                            List.of()));
+        }
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+            AgendaService agendaService = new AgendaService(
+                    new YamlAgendaRepository(yamlMapper, factory.getValidator()), RELOGIO_W48);
+            BacklogRepository backlogRepo = new YamlBacklogRepository(yamlMapper, factory.getValidator());
+            PlanejamentoService planejamento = new PlanejamentoService(new ConfiabilidadeAlocadorStrategy());
+            ConfiabilidadeService confiabilidadeService = new ConfiabilidadeService(feedbackRepo, dadosTemp);
+            FeedbackService feedbackService = new FeedbackService(
+                    agendaService, backlogRepo, planejamento, feedbackRepo, confiabilidadeService, dadosTemp);
+            MarkdownSemanalExportador exportador = new MarkdownSemanalExportador();
+            PlanoSemanalRepository planoRepo = new MarkdownPlanoSemanalRepository();
+
+            assertThatNullPointerException().isThrownBy(() -> new PlanoSemanalService(
+                    agendaService,
+                    backlogRepo,
+                    planejamento,
+                    feedbackService,
+                    null,
+                    exportador,
+                    planoRepo,
+                    dadosTemp));
+
+            PlanoSemanalService service = new PlanoSemanalService(
+                    agendaService,
+                    backlogRepo,
+                    planejamento,
+                    feedbackService,
+                    confiabilidadeService,
+                    exportador,
+                    planoRepo,
+                    dadosTemp);
+
+            PlanoSemanalGerado gerado = service.gerarEExportar(null, null, null);
+            String markdown = Files.readString(gerado.arquivoSaida(), StandardCharsets.UTF_8);
+
+            assertThat(markdown)
+                    .contains(
+                            "| 07:00–07:25 | **Bloco profundo** | Testes JUnit (1/1) |",
+                            "| 13:10–13:35 | **Bloco profundo** | Java Core (1/1) |",
+                            "Faixa segunda-feira (manhã) com baixa confiabilidade (0%, 3 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).")
+                    .doesNotContain("terça-feira (noite)");
         }
     }
 }

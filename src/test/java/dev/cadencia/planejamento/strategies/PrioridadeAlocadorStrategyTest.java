@@ -174,6 +174,9 @@ class PrioridadeAlocadorStrategyTest {
         ResultadoAlocacao resultado = strategy.alocar(blocosMutaveis, tarefasMutaveis);
         assertThat(blocosMutaveis).containsExactly(bloco);
         assertThat(tarefasMutaveis).containsExactly(t1);
+        assertThat(strategy.confiabilidadesConfiguradas()).isEmpty();
+        assertThat(strategy.alocar(List.of(bloco), List.of(t1), java.util.Map.of())).isEqualTo(resultado);
+        assertThatNullPointerException().isThrownBy(() -> strategy.alocar(List.of(bloco), List.of(t1), null));
         assertThatThrownBy(resultado.alocados()::clear).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(resultado.naoAlocados()::clear)
                 .isInstanceOf(UnsupportedOperationException.class);

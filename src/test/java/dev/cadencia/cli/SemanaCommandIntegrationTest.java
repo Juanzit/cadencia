@@ -452,6 +452,93 @@ class SemanaCommandIntegrationTest {
     }
 
     @Test
+    void deveAplicarConfiabilidadeHistoricaNaAlocacaoEEmitirAvisoViaCliEFalharComFeedbackInvalido()
+            throws IOException {
+        FeedbackRepository feedbackRepository = applicationContext.getBean(FeedbackRepository.class);
+        Path dirFeedback = diretorioDadosTemporario.resolve("feedback");
+        Path backlogConfiabilidade = Files.createTempFile(diretorioDadosTemporario, "backlog-conf-", ".yaml");
+        Files.writeString(backlogConfiabilidade, """
+                tarefas:
+                  - id: "core"
+                    titulo: "Java Core"
+                    duracao_total_min: 50
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "junit"
+                    titulo: "Testes JUnit"
+                    duracao_total_min: 50
+                    tipos_aceitos: [PROFUNDO, INTERROMPIVEL]
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        Path w45 = dirFeedback.resolve("2026-W45.md");
+        Path w46 = dirFeedback.resolve("2026-W46.md");
+        Path w47 = dirFeedback.resolve("2026-W47.md");
+        Path invalido = dirFeedback.resolve("2026-W49.md");
+        try {
+            for (int iso = 45; iso <= 47; iso++) {
+                feedbackRepository.salvar(
+                        dirFeedback.resolve(String.format("2026-W%02d.md", iso)),
+                        new FeedbackSemanal(
+                                2026,
+                                iso,
+                                List.of(new ItemFeedback(
+                                        DayOfWeek.MONDAY,
+                                        LocalTime.of(7, 0),
+                                        LocalTime.of(7, 25),
+                                        "Estudo matinal",
+                                        StatusBloco.NAO_ACONTECEU,
+                                        null)),
+                                List.of()));
+            }
+
+            StringWriter out = new StringWriter();
+            StringWriter err = new StringWriter();
+            int codigo = runner.executar(
+                    new PrintWriter(out),
+                    new PrintWriter(err),
+                    "semana",
+                    "--agenda", "exemplos/agenda.exemplo.yaml",
+                    "--backlog", backlogConfiabilidade.toString(),
+                    "--data", "2026-11-23");
+
+            assertThat(codigo).isZero();
+            assertThat(err.toString()).isEmpty();
+
+            String markdown = Files.readString(
+                    diretorioDadosTemporario.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
+            assertThat(markdown).contains(
+                    "| 07:00–07:25 | **Bloco profundo** | Testes JUnit (1/2) |",
+                    "| 07:25–07:50 | **Bloco profundo** | Testes JUnit (2/2) |",
+                    "| 13:10–13:35 | **Bloco profundo** | Java Core (1/2) |",
+                    "| 13:35–14:00 | **Bloco profundo** | Java Core (2/2) |",
+                    "Faixa segunda-feira (manhã) com baixa confiabilidade (0%, 3 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).");
+
+            // Feedback histórico inválido com --backlog retorna código 2 sem stack trace
+            Files.writeString(invalido, "formato invalido", StandardCharsets.UTF_8);
+            StringWriter errInvalido = new StringWriter();
+            int codInvalido = runner.executar(
+                    new PrintWriter(new StringWriter()),
+                    new PrintWriter(errInvalido),
+                    "semana",
+                    "--verbose",
+                    "--agenda", "exemplos/agenda.exemplo.yaml",
+                    "--backlog", backlogConfiabilidade.toString(),
+                    "--data", "2026-11-23");
+            assertThat(codInvalido).isEqualTo(2);
+            assertThat(errInvalido.toString())
+                    .contains("2026-W49.md")
+                    .doesNotContain("at dev.cadencia.");
+        } finally {
+            Files.deleteIfExists(w45);
+            Files.deleteIfExists(w46);
+            Files.deleteIfExists(w47);
+            Files.deleteIfExists(invalido);
+            Files.deleteIfExists(backlogConfiabilidade);
+        }
+    }
+
+    @Test
     void picocliSpringFactoryDeveFazerFallbackParaClassesNaoGerenciadas() throws Exception {
         CommandLine.IFactory defaultResultTarget = springFactory;
         Object helper = defaultResultTarget.create(PicocliHelperNaoBean.class);

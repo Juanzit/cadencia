@@ -20,7 +20,7 @@ cadencia/
 └── src/
     ├── main/java/dev/cadencia/
     │   ├── CadenciaApplication.java  # ponto de entrada Spring Boot (SpringApplication.exit + System.exit)
-    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e propriedades cadencia.* (`pedaco-padrao-min`, `folga-minima-min`)
+    │   ├── CadenciaConfig.java       # wiring Spring das portas, adapters, serviços e propriedades cadencia.* (`pedaco-padrao-min`, `folga-minima-min`, `confiabilidade.*`)
     │   ├── cli/                  # CONTROLLER: comandos Picocli + integração Spring Boot
     │   │   ├── CadenciaCommand.java       # comando raiz (`semana`, `feedback`) sem efeitos colaterais sem subcomando
     │   │   ├── CliValidacoes.java         # validação compartilhada de `--data`, `--agenda` e `--backlog`
@@ -46,17 +46,17 @@ cadencia/
     │   │   ├── PedacoAlocado.java     # alocação de um Pedaco (blocoOrigem, data, inicio, fim, pedaco) (1.3)
     │   │   ├── ResultadoAlocacao.java # saída imutável (alocados e naoAlocados) (1.3)
     │   │   ├── YamlBacklogRepository.java # adapter YAML (Jackson + Bean Validation + IDs únicos + pedaco-padrao-min) (1.1, 1.8)
-    │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual e folga mínima configurável (1.4–1.5, ADR-013)
+    │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual, folga mínima configurável e sobrecarga com confiabilidade (1.4–1.6, ADR-013)
     │   │   └── strategies/
-    │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação (1.3, ADR-013)
+    │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação com suporte opcional à confiabilidade (1.3, 1.6, ADR-013)
     │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3, ADR-013)
-    │   │       └── ConfiabilidadeAlocadorStrategy.java
+    │   │       └── ConfiabilidadeAlocadorStrategy.java # fábrica `comConfiabilidade` e proteção de blocos PROFUNDO degradados aceitando qualquer tarefa `INTERROMPIVEL` (1.6)
     │   ├── feedback/             # módulo de feedback e confiabilidade
     │   │   ├── FeedbackRepository.java          # porta de existência, leitura, histórico cronológico e gravação de feedback (1.1, 1.3)
-    │   │   ├── FeedbackService.java             # gera modelo `feedback/AAAA-Wnn.md` e resolve última nota `"parei aqui"` vigente por tarefa (1.3, 1.4)
+    │   │   ├── FeedbackService.java             # gera modelo `feedback/AAAA-Wnn.md` (com confiabilidade) e resolve última nota `"parei aqui"` vigente por tarefa (1.3, 1.4, 1.6)
     │   │   ├── MarkdownFeedbackRepository.java  # parser tolerante (HH:mm e HH:mm–HH:mm) e escrita UTF-8 LF idempotente (1.1, 1.3)
     │   │   ├── ModeloFeedbackGerado.java        # resultado imutável da geração do arquivo modelo de feedback (1.3)
-    │   │   └── ConfiabilidadeService.java
+    │   │   └── ConfiabilidadeService.java       # `calcularPorFaixa` por faixa sobre janela de N semanas com mínimo de amostras e limite configurável (1.5)
     │   ├── turmas/               # módulo de turmas e previsão
     │   │   ├── TurmaRepository.java
     │   │   ├── CsvTurmaRepository.java
@@ -70,16 +70,17 @@ cadencia/
     │   │   ├── MarkdownPlanoSemanalRepository.java # adapter de gravação UTF-8 + LF criando diretórios pais
     │   │   ├── PlanoSemanalGerado.java             # resultado imutável (arquivoSaida + SemanaPlanejada + ResultadoAlocacao opcional)
     │   │   ├── PlanoSemanalRepository.java         # porta de persistência do plano semanal
-    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, BacklogRepository, PlanejamentoService, FeedbackService, ExportadorStrategy e PlanoSemanalRepository (3.2, 1.6, 1.4)
+    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, BacklogRepository, PlanejamentoService, FeedbackService, ConfiabilidadeService, ExportadorStrategy e PlanoSemanalRepository (3.2, 1.4, 1.6)
     │   │   └── strategies/
-    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação (com/sem ResultadoAlocacao e notas de retomada) (3.1, 1.6, 1.4)
-    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal com pedaços alocados e retomada `"parei aqui"` (3.1, 1.6, 1.4)
+    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação (ResultadoAlocacao, notas de retomada e faixas de baixa confiabilidade) (3.1, 1.4, 1.6)
+    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal com pedaços alocados, retomada `"parei aqui"` e avisos de confiabilidade (3.1, 1.4, 1.6)
     │   └── dominio/              # DOMAIN: records e regras puras (sem Spring)
     │       ├── AgendaConfiguracao.java
     │       ├── Bloco.java
     │       ├── BlocoManual.java
     │       ├── Classificacao.java
     │       ├── Compromisso.java
+    │       ├── ConfiabilidadeFaixa.java
     │       ├── FaixaHorario.java
     │       ├── FeedbackSemanal.java
     │       ├── ItemFeedback.java
@@ -94,7 +95,7 @@ cadencia/
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
     │       └── Turma.java
-    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 4 regras)
+    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest, ConfiabilidadeServiceTest, ConfiabilidadeAlocadorStrategyTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 5 regras, incluindo planejamento -> feedback proibido)
 ```
 
 > `groupId` definido: `dev.cadencia` (Q4 decidida).
@@ -120,6 +121,7 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 * `Pedaco`: referência imutável à `Tarefa`, `numero`, `total` e duração positiva da fração (`numero/total`).
 * `StatusBloco`: enum determinístico (`CONCLUIDO` = `1.0`, `INTERROMPIDO` = `0.5`, `NAO_ACONTECEU` = `0.0`).
 * `PeriodoDia` e `FaixaHorario`: agrupamento estatístico determinístico por `(DayOfWeek, PeriodoDia)` (`MANHA < 12:00`, `TARDE 12:00–17:59`, `NOITE >= 18:00`).
+* `ConfiabilidadeFaixa`: record imutável de 5 componentes (`faixa`, `amostras`, `indice`, `amostrasSuficientes`, `baixaConfiabilidade`), garantindo consistência (`baixaConfiabilidade` só pode ser `true` quando `amostrasSuficientes` for `true`).
 * `ItemFeedback`: registro imutável por dia/horário (com `fim` opcional e nota normalizada `"parei aqui"`), status e derivação de `FaixaHorario`.
 * `FeedbackSemanal`: feedback consolidado de uma semana ISO (`ano >= 2000`, `1 <= numeroIso <= 53`, listas imutáveis de itens e notas gerais).
 * `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas.
@@ -154,6 +156,10 @@ cadencia:
   fuso: America/Sao_Paulo
   pedaco-padrao-min: 25
   folga-minima-min: 10
+  confiabilidade:
+    janela-semanas: 4
+    minimo-amostras: 3
+    limite-confiabilidade: 0.50
   ollama:
     url: http://localhost:11434
     modelo-geral: <definir após testar na GPU>

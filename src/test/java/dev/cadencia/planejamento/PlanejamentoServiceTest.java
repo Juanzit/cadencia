@@ -8,16 +8,22 @@ import dev.cadencia.agenda.IntervaloOcupado;
 import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.agenda.TipoIntervaloOcupado;
 import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.ConfiabilidadeFaixa;
+import dev.cadencia.dominio.FaixaHorario;
+import dev.cadencia.dominio.PeriodoDia;
 import dev.cadencia.dominio.Semana;
 import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.dominio.TipoBloco;
 import dev.cadencia.planejamento.strategies.AlocadorStrategy;
+import dev.cadencia.planejamento.strategies.ConfiabilidadeAlocadorStrategy;
 import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -281,6 +287,58 @@ class PlanejamentoServiceTest {
         assertThat(resultado.alocados()).hasSize(2);
         assertAlocacao(resultado.alocados().get(0), SEGUNDA, "00:00", "00:25", "t1");
         assertAlocacao(resultado.alocados().get(1), SEGUNDA, "20:00", "20:25", "t1");
+    }
+
+    @Test
+    void devePropagarConfiabilidadesNaSobrecargaRespeitandoFolgaMinimaEValidandoCompatibilidadeDegradada() {
+        Bloco segManhaRuim = bloco(SEGUNDA, "07:00", "08:30", TipoBloco.PROFUNDO);
+        Bloco segTardeBoa = bloco(SEGUNDA, "13:00", "14:00", TipoBloco.PROFUNDO);
+        IntervaloOcupado aula = ocupado(SEGUNDA, "08:30", 60, "Aula");
+
+        Tarefa exclusivoProfundo = tarefa("core", "Java Core", 25, List.of(TipoBloco.PROFUNDO), 1);
+        Tarefa somenteInterrompivel = tarefa("cards", "Flashcards", 25, List.of(TipoBloco.INTERROMPIVEL), 2);
+        Tarefa flexivel = tarefa(
+                "junit", "Testes JUnit", 25, List.of(TipoBloco.PROFUNDO, TipoBloco.INTERROMPIVEL), 3);
+
+        FaixaHorario faixaRuim = new FaixaHorario(DayOfWeek.MONDAY, PeriodoDia.MANHA);
+        Map<FaixaHorario, ConfiabilidadeFaixa> mapa = Map.of(
+                faixaRuim, new ConfiabilidadeFaixa(faixaRuim, 3, 0.25, true, true));
+
+        PlanejamentoService service = new PlanejamentoService(new ConfiabilidadeAlocadorStrategy());
+        SemanaPlanejada semana = semanaPlanejada(List.of(segManhaRuim, segTardeBoa), List.of(aula));
+
+        ResultadoAlocacao resultado = service.alocar(
+                semana, List.of(exclusivoProfundo, somenteInterrompivel, flexivel), mapa);
+
+        assertThat(resultado.naoAlocados()).isEmpty();
+        assertThat(resultado.alocados()).hasSize(3);
+        assertAlocacao(resultado.alocados().get(0), SEGUNDA, "07:00", "07:25", "cards");
+        assertAlocacao(resultado.alocados().get(1), SEGUNDA, "07:25", "07:50", "junit");
+        assertAlocacao(resultado.alocados().get(2), SEGUNDA, "13:00", "13:25", "core");
+        assertThat(resultado.alocados().get(0).blocoOrigem().fim()).isEqualTo(LocalTime.of(8, 20));
+
+        // Também valida via ConfiabilidadeAlocadorStrategy.comConfiabilidade sem passar mapa no alocar(2 args)
+        PlanejamentoService serviceComEstrategia = new PlanejamentoService(
+                ConfiabilidadeAlocadorStrategy.comConfiabilidade(mapa));
+        assertThat(serviceComEstrategia.alocar(
+                        semana, List.of(exclusivoProfundo, somenteInterrompivel, flexivel)))
+                .isEqualTo(resultado);
+
+        // Se uma estratégia violar a proteção alocando tarefa exclusivamente PROFUNDO em faixa ruim, o serviço rejeita
+        AlocadorStrategy estrategiaVioladora = (blocos, tarefas) -> new ResultadoAlocacao(
+                List.of(new PedacoAlocado(
+                        blocos.get(0),
+                        SEGUNDA,
+                        LocalTime.of(7, 0),
+                        LocalTime.of(7, 25),
+                        exclusivoProfundo.dividirEmPedacos().get(0))),
+                List.of());
+        ResultadoAlocacao corrigido = new PlanejamentoService(estrategiaVioladora)
+                .alocar(semana, List.of(exclusivoProfundo), mapa);
+        assertThat(corrigido.alocados()).isEmpty();
+        assertThat(corrigido.naoAlocados()).hasSize(1);
+
+        assertThatNullPointerException().isThrownBy(() -> service.alocar(semana, List.of(), null));
     }
 
     private static SemanaPlanejada semanaPlanejada(

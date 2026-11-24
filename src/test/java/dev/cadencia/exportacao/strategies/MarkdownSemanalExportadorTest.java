@@ -546,4 +546,63 @@ class MarkdownSemanalExportadorTest {
         assertThatNullPointerException()
                 .isThrownBy(() -> exportador.exportar(semana, alocacaoDesordenada, mapaComChaveNula));
     }
+
+    @Test
+    void deveRenderizarAvisosDeBaixaConfiabilidadeOrdenadosESemDuplicidade() {
+        LocalDate segunda = LocalDate.of(2026, 11, 23);
+        Bloco bloco = new Bloco(segunda, LocalTime.of(7, 0), LocalTime.of(8, 30), TipoBloco.PROFUNDO, null);
+        SemanaPlanejada semana = new SemanaPlanejada(
+                segunda,
+                new Semana(2026, 48, List.of(), List.of(bloco)),
+                List.of(),
+                List.of("Aviso prévio da agenda."));
+        ResultadoAlocacao alocacao = new ResultadoAlocacao(List.of(), List.of());
+
+        dev.cadencia.dominio.ConfiabilidadeFaixa segManha = new dev.cadencia.dominio.ConfiabilidadeFaixa(
+                new dev.cadencia.dominio.FaixaHorario(DayOfWeek.MONDAY, dev.cadencia.dominio.PeriodoDia.MANHA),
+                4,
+                0.25,
+                true,
+                true);
+        dev.cadencia.dominio.ConfiabilidadeFaixa quaNoite = new dev.cadencia.dominio.ConfiabilidadeFaixa(
+                new dev.cadencia.dominio.FaixaHorario(DayOfWeek.WEDNESDAY, dev.cadencia.dominio.PeriodoDia.NOITE),
+                3,
+                0.33,
+                true,
+                true);
+
+        String md = exportador.exportar(
+                semana, alocacao, Map.of(), List.of(quaNoite, segManha, segManha));
+
+        assertThat(md).contains("""
+                ## Avisos
+                - Aviso prévio da agenda.
+                - Faixa segunda-feira (manhã) com baixa confiabilidade (25%, 4 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).
+                - Faixa quarta-feira (noite) com baixa confiabilidade (33%, 3 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).
+                """);
+
+        assertThatNullPointerException().isThrownBy(() -> exportador.exportar(semana, alocacao, Map.of(), null));
+        List<dev.cadencia.dominio.ConfiabilidadeFaixa> comNulo = new java.util.ArrayList<>();
+        comNulo.add(null);
+        assertThatNullPointerException().isThrownBy(() -> exportador.exportar(semana, alocacao, Map.of(), comNulo));
+
+        // Cobre também o método default da interface ExportadorStrategy
+        ExportadorStrategy estrategiaSimples = new ExportadorStrategy() {
+            @Override
+            public String exportar(SemanaPlanejada sp) {
+                return "";
+            }
+
+            @Override
+            public String exportar(SemanaPlanejada sp, ResultadoAlocacao ra) {
+                return "";
+            }
+
+            @Override
+            public String exportar(SemanaPlanejada sp, ResultadoAlocacao ra, Map<String, String> notas) {
+                return "delegado";
+            }
+        };
+        assertThat(estrategiaSimples.exportar(semana, alocacao, Map.of(), List.of())).isEqualTo("delegado");
+    }
 }

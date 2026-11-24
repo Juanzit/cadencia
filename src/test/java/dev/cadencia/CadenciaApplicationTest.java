@@ -6,16 +6,26 @@ import dev.cadencia.cli.CadenciaCommand;
 import dev.cadencia.cli.PicocliCommandRunner;
 import dev.cadencia.cli.PicocliSpringFactory;
 import dev.cadencia.cli.SemanaCommand;
+import dev.cadencia.dominio.FeedbackSemanal;
+import dev.cadencia.dominio.ItemFeedback;
+import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.exportacao.PlanoSemanalService;
+import dev.cadencia.feedback.ConfiabilidadeService;
+import dev.cadencia.feedback.FeedbackRepository;
+import dev.cadencia.feedback.MarkdownFeedbackRepository;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.strategies.AlocadorStrategy;
+import dev.cadencia.planejamento.strategies.ConfiabilidadeAlocadorStrategy;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -77,7 +87,9 @@ class CadenciaApplicationTest {
         assertThat(applicationContext.getBean(CadenciaCommand.class)).isNotNull();
         assertThat(applicationContext.getBean(SemanaCommand.class)).isNotNull();
         assertThat(applicationContext.getBean(BacklogRepository.class)).isNotNull();
-        assertThat(applicationContext.getBean(AlocadorStrategy.class)).isNotNull();
+        assertThat(applicationContext.getBean(AlocadorStrategy.class))
+                .isInstanceOf(ConfiabilidadeAlocadorStrategy.class);
+        assertThat(applicationContext.getBean(ConfiabilidadeService.class)).isNotNull();
         assertThat(applicationContext.getBean(PlanejamentoService.class)).isNotNull();
         assertThat(applicationContext.getBean(PlanoSemanalService.class)).isNotNull();
 
@@ -143,5 +155,62 @@ class CadenciaApplicationTest {
                 "- Pedaços alocados: 2 (1h10)",
                 "| 07:00–07:35 | **Bloco profundo** | Java Streams (1/2) |",
                 "| 07:35–08:10 | **Bloco profundo** | Java Streams (2/2) |");
+    }
+
+    @Test
+    void deveAplicarPropriedadesCustomizadasDeConfiabilidadeNaConfiguracaoSpring() throws IOException {
+        Path dadosConfiabilidade = Files.createTempDirectory(diretorioDadosTemporario, "conf-custom-");
+        Files.writeString(dadosConfiabilidade.resolve("backlog.yaml"), """
+                tarefas:
+                  - id: "core"
+                    titulo: "Java Core"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "junit"
+                    titulo: "Testes JUnit"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO, INTERROMPIVEL]
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        FeedbackRepository repo = new MarkdownFeedbackRepository();
+        // W45 foi ruim, W46 foi 0.50 (1.0 e 0.0 -> média 0.50 < limite customizado 0.75) e W47 boa?
+        // Com janela-semanas=2 (W46, W47) e minimo-amostras=2, limite=0.75:
+        // seg MANHA em W46 (0.0) e W47 (1.0) => média 0.50 (< 0.75, 2 amostras >= 2) => restringida!
+        repo.salvar(dadosConfiabilidade.resolve("feedback/2026-W45.md"), new FeedbackSemanal(
+                2026, 45,
+                List.of(new ItemFeedback(DayOfWeek.MONDAY, LocalTime.of(8, 0), null, "Estudo", StatusBloco.CONCLUIDO, null)),
+                List.of()));
+        repo.salvar(dadosConfiabilidade.resolve("feedback/2026-W46.md"), new FeedbackSemanal(
+                2026, 46,
+                List.of(new ItemFeedback(DayOfWeek.MONDAY, LocalTime.of(8, 0), null, "Estudo", StatusBloco.NAO_ACONTECEU, null)),
+                List.of()));
+        repo.salvar(dadosConfiabilidade.resolve("feedback/2026-W47.md"), new FeedbackSemanal(
+                2026, 47,
+                List.of(new ItemFeedback(DayOfWeek.MONDAY, LocalTime.of(8, 0), null, "Estudo", StatusBloco.CONCLUIDO, null)),
+                List.of()));
+
+        try (ConfigurableApplicationContext contexto = new SpringApplicationBuilder(CadenciaApplication.class)
+                .initializers(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
+                        new MapPropertySource("customConfiabilidade", Map.of(
+                                "cadencia.diretorio-dados", dadosConfiabilidade.toString(),
+                                "cadencia.confiabilidade.janela-semanas", "2",
+                                "cadencia.confiabilidade.minimo-amostras", "2",
+                                "cadencia.confiabilidade.limite-confiabilidade", "0.75"))))
+                .run("semana", "--agenda", "exemplos/agenda.exemplo.yaml", "--data", "2026-11-23")) {
+            ConfiabilidadeService cs = contexto.getBean(ConfiabilidadeService.class);
+            assertThat(cs.janelaSemanas()).isEqualTo(2);
+            assertThat(cs.minimoAmostras()).isEqualTo(2);
+            assertThat(cs.limiteConfiabilidade()).isEqualTo(0.75);
+            assertThat(SpringApplication.exit(contexto)).isZero();
+        }
+
+        String markdown = Files.readString(
+                dadosConfiabilidade.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
+        assertThat(markdown).contains(
+                "| 07:00–07:25 | **Bloco profundo** | Testes JUnit (1/1) |",
+                "| 13:10–13:35 | **Bloco profundo** | Java Core (1/1) |",
+                "Faixa segunda-feira (manhã) com baixa confiabilidade (50%, 2 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).");
     }
 }

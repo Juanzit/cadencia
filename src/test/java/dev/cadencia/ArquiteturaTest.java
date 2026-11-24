@@ -74,4 +74,11 @@ class ArquiteturaTest {
             .or().resideInAPackage("dev.cadencia.dominio..")
             .should().dependOnClassesThat().resideInAPackage("dev.cadencia.cli..")
             .because("a dependência flui da CLI para baixo, nunca o contrário");
+
+    // Grafo modular acíclico: feedback depende de planejamento (modelo), nunca o inverso.
+    @ArchTest
+    static final ArchRule planejamentoNaoDependeDeFeedback = noClasses()
+            .that().resideInAPackage("dev.cadencia.planejamento..")
+            .should().dependOnClassesThat().resideInAPackage("dev.cadencia.feedback..")
+            .because("planejamento deve receber confiabilidade pelo domínio para manter o grafo acíclico");
 }

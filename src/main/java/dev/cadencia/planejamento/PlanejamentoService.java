@@ -3,8 +3,11 @@ package dev.cadencia.planejamento;
 import dev.cadencia.agenda.IntervaloOcupado;
 import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.ConfiabilidadeFaixa;
+import dev.cadencia.dominio.FaixaHorario;
 import dev.cadencia.dominio.Pedaco;
 import dev.cadencia.dominio.Tarefa;
+import dev.cadencia.dominio.TipoBloco;
 import dev.cadencia.planejamento.strategies.AlocadorStrategy;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -48,6 +51,27 @@ public class PlanejamentoService {
      * garantindo compatibilidade individual por {@link Tarefa#tiposAceitos()}.
      */
     public ResultadoAlocacao alocar(SemanaPlanejada semanaPlanejada, List<Tarefa> tarefas) {
+        return alocarInterno(semanaPlanejada, tarefas, null);
+    }
+
+    /**
+     * Aplica a folga mínima configurada nos blocos da {@code semanaPlanejada} e aloca as
+     * {@code tarefas} considerando o índice histórico de confiabilidade por {@link FaixaHorario},
+     * mantendo a compatibilidade individual por {@link Tarefa#tiposAceitos()}.
+     */
+    public ResultadoAlocacao alocar(
+            SemanaPlanejada semanaPlanejada,
+            List<Tarefa> tarefas,
+            Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidadesPorFaixa) {
+        Objects.requireNonNull(
+                confiabilidadesPorFaixa, "confiabilidadesPorFaixa não pode ser nulo");
+        return alocarInterno(semanaPlanejada, tarefas, Map.copyOf(confiabilidadesPorFaixa));
+    }
+
+    private ResultadoAlocacao alocarInterno(
+            SemanaPlanejada semanaPlanejada,
+            List<Tarefa> tarefas,
+            Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidadesOuNulo) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
         Objects.requireNonNull(tarefas, "tarefas não pode ser nulo");
 
@@ -55,11 +79,17 @@ public class PlanejamentoService {
         List<Bloco> blocosAjustados = aplicarFolgaMinima(
                 semanaPlanejada.semana().blocos(), semanaPlanejada.intervalosOcupados());
 
-        ResultadoAlocacao resultadoBruto = Objects.requireNonNull(
-                alocadorStrategy.alocar(blocosAjustados, tarefasCopia),
-                "resultado da estratégia não pode ser nulo");
+        ResultadoAlocacao resultadoBruto = confiabilidadesOuNulo == null
+                ? alocadorStrategy.alocar(blocosAjustados, tarefasCopia)
+                : alocadorStrategy.alocar(blocosAjustados, tarefasCopia, confiabilidadesOuNulo);
+        Objects.requireNonNull(resultadoBruto, "resultado da estratégia não pode ser nulo");
 
-        return garantirCompatibilidadeIndividual(resultadoBruto);
+        Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidadesEfetivas = confiabilidadesOuNulo != null
+                ? confiabilidadesOuNulo
+                : Objects.requireNonNullElse(
+                        alocadorStrategy.confiabilidadesConfiguradas(), Map.of());
+
+        return garantirCompatibilidadeIndividual(resultadoBruto, confiabilidadesEfetivas);
     }
 
     private List<Bloco> aplicarFolgaMinima(
@@ -139,13 +169,14 @@ public class PlanejamentoService {
                 bloco.descricao());
     }
 
-    private static ResultadoAlocacao garantirCompatibilidadeIndividual(ResultadoAlocacao resultadoBruto) {
+    private static ResultadoAlocacao garantirCompatibilidadeIndividual(
+            ResultadoAlocacao resultadoBruto,
+            Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidades) {
         List<PedacoAlocado> alocadosCompativeis = new ArrayList<>(resultadoBruto.alocados().size());
         List<Pedaco> naoAlocados = new ArrayList<>();
 
         for (PedacoAlocado alocado : resultadoBruto.alocados()) {
-            Tarefa tarefa = alocado.pedaco().tarefa();
-            if (tarefa.tiposAceitos().contains(alocado.blocoOrigem().tipo())) {
+            if (alocadoCompativel(alocado, confiabilidades)) {
                 alocadosCompativeis.add(alocado);
             } else {
                 naoAlocados.add(alocado.pedaco());
@@ -157,5 +188,20 @@ public class PlanejamentoService {
         }
         naoAlocados.addAll(resultadoBruto.naoAlocados());
         return new ResultadoAlocacao(alocadosCompativeis, naoAlocados);
+    }
+
+    private static boolean alocadoCompativel(
+            PedacoAlocado alocado, Map<FaixaHorario, ConfiabilidadeFaixa> confiabilidades) {
+        Bloco blocoOrigem = alocado.blocoOrigem();
+        Tarefa tarefa = alocado.pedaco().tarefa();
+        if (blocoOrigem.tipo() == TipoBloco.PROFUNDO && !confiabilidades.isEmpty()) {
+            FaixaHorario faixa = FaixaHorario.de(
+                    blocoOrigem.data().getDayOfWeek(), blocoOrigem.inicio());
+            ConfiabilidadeFaixa confiabilidade = confiabilidades.get(faixa);
+            if (confiabilidade != null && confiabilidade.baixaConfiabilidade()) {
+                return tarefa.tiposAceitos().contains(TipoBloco.INTERROMPIVEL);
+            }
+        }
+        return tarefa.tiposAceitos().contains(blocoOrigem.tipo());
     }
 }

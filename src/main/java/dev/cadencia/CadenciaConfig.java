@@ -10,6 +10,7 @@ import dev.cadencia.exportacao.PlanoSemanalRepository;
 import dev.cadencia.exportacao.PlanoSemanalService;
 import dev.cadencia.exportacao.strategies.ExportadorStrategy;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.feedback.ConfiabilidadeService;
 import dev.cadencia.feedback.FeedbackRepository;
 import dev.cadencia.feedback.FeedbackService;
 import dev.cadencia.feedback.MarkdownFeedbackRepository;
@@ -17,7 +18,7 @@ import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.YamlBacklogRepository;
 import dev.cadencia.planejamento.strategies.AlocadorStrategy;
-import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
+import dev.cadencia.planejamento.strategies.ConfiabilidadeAlocadorStrategy;
 import jakarta.validation.Validator;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -61,7 +62,7 @@ public class CadenciaConfig {
 
     @Bean
     AlocadorStrategy alocadorStrategy() {
-        return new PrioridadeAlocadorStrategy();
+        return new ConfiabilidadeAlocadorStrategy();
     }
 
     @Bean
@@ -87,6 +88,7 @@ public class CadenciaConfig {
             BacklogRepository backlogRepository,
             PlanejamentoService planejamentoService,
             FeedbackService feedbackService,
+            ConfiabilidadeService confiabilidadeService,
             ExportadorStrategy exportadorStrategy,
             PlanoSemanalRepository planoSemanalRepository,
             @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados) {
@@ -95,6 +97,7 @@ public class CadenciaConfig {
                 backlogRepository,
                 planejamentoService,
                 feedbackService,
+                confiabilidadeService,
                 exportadorStrategy,
                 planoSemanalRepository,
                 diretorioDados);
@@ -106,17 +109,34 @@ public class CadenciaConfig {
     }
 
     @Bean
+    ConfiabilidadeService confiabilidadeService(
+            FeedbackRepository feedbackRepository,
+            @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados,
+            @Value("${cadencia.confiabilidade.janela-semanas:4}") int janelaSemanas,
+            @Value("${cadencia.confiabilidade.minimo-amostras:3}") int minimoAmostras,
+            @Value("${cadencia.confiabilidade.limite-confiabilidade:0.50}") double limiteConfiabilidade) {
+        return new ConfiabilidadeService(
+                feedbackRepository,
+                diretorioDados,
+                janelaSemanas,
+                minimoAmostras,
+                limiteConfiabilidade);
+    }
+
+    @Bean
     FeedbackService feedbackService(
             AgendaService agendaService,
             BacklogRepository backlogRepository,
             PlanejamentoService planejamentoService,
             FeedbackRepository feedbackRepository,
+            ConfiabilidadeService confiabilidadeService,
             @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados) {
         return new FeedbackService(
                 agendaService,
                 backlogRepository,
                 planejamentoService,
                 feedbackRepository,
+                confiabilidadeService,
                 diretorioDados);
     }
 }

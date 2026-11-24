@@ -4,7 +4,10 @@ import dev.cadencia.agenda.IntervaloOcupado;
 import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.agenda.TipoIntervaloOcupado;
 import dev.cadencia.dominio.Bloco;
+import dev.cadencia.dominio.ConfiabilidadeFaixa;
+import dev.cadencia.dominio.FaixaHorario;
 import dev.cadencia.dominio.Pedaco;
+import dev.cadencia.dominio.PeriodoDia;
 import dev.cadencia.dominio.Semana;
 import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.dominio.TipoBloco;
@@ -62,15 +65,19 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
             .thenComparing(LinhaDia::tipo)
             .thenComparing(LinhaDia::detalhe);
 
+    private static final Comparator<ConfiabilidadeFaixa> ORDEM_FAIXAS_CONFIABILIDADE = Comparator
+            .comparingInt((ConfiabilidadeFaixa cf) -> cf.faixa().diaSemana().getValue())
+            .thenComparingInt(cf -> cf.faixa().periodo().ordinal());
+
     @Override
     public String exportar(SemanaPlanejada semanaPlanejada) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
-        return exportarInterno(semanaPlanejada, null, Map.of());
+        return exportarInterno(semanaPlanejada, null, Map.of(), List.of());
     }
 
     @Override
     public String exportar(SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao) {
-        return exportar(semanaPlanejada, resultadoAlocacao, Map.of());
+        return exportar(semanaPlanejada, resultadoAlocacao, Map.of(), List.of());
     }
 
     @Override
@@ -78,17 +85,31 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
             SemanaPlanejada semanaPlanejada,
             ResultadoAlocacao resultadoAlocacao,
             Map<String, String> notasRetomadaPorTarefa) {
+        return exportar(semanaPlanejada, resultadoAlocacao, notasRetomadaPorTarefa, List.of());
+    }
+
+    @Override
+    public String exportar(
+            SemanaPlanejada semanaPlanejada,
+            ResultadoAlocacao resultadoAlocacao,
+            Map<String, String> notasRetomadaPorTarefa,
+            List<ConfiabilidadeFaixa> faixasBaixaConfiabilidade) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
         Objects.requireNonNull(resultadoAlocacao, "resultadoAlocacao não pode ser nulo");
         Objects.requireNonNull(notasRetomadaPorTarefa, "notasRetomadaPorTarefa não pode ser nulo");
+        Objects.requireNonNull(
+                faixasBaixaConfiabilidade, "faixasBaixaConfiabilidade não pode ser nulo");
         Map<String, String> notasNormalizadas = normalizarNotasRetomada(notasRetomadaPorTarefa);
-        return exportarInterno(semanaPlanejada, resultadoAlocacao, notasNormalizadas);
+        List<ConfiabilidadeFaixa> faixasNormalizadas =
+                normalizarFaixasBaixaConfiabilidade(faixasBaixaConfiabilidade);
+        return exportarInterno(semanaPlanejada, resultadoAlocacao, notasNormalizadas, faixasNormalizadas);
     }
 
     private static String exportarInterno(
             SemanaPlanejada semanaPlanejada,
             ResultadoAlocacao resultadoAlocacao,
-            Map<String, String> notasRetomadaPorTarefa) {
+            Map<String, String> notasRetomadaPorTarefa,
+            List<ConfiabilidadeFaixa> faixasBaixaConfiabilidade) {
         LocalDate inicioSemana = semanaPlanejada.inicioSemana();
         LocalDate fimSemana = inicioSemana.plusDays(DIAS_DA_SEMANA - 1L);
         Semana semana = semanaPlanejada.semana();
@@ -113,8 +134,22 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                 alocadosOrdenados,
                 duracaoMinimaResidual);
         escreverChecklist(md, blocosOrdenados, alocadosOrdenados, notasRetomadaPorTarefa);
-        escreverAvisos(md, semanaPlanejada.avisos(), resultadoAlocacao);
+        escreverAvisos(md, semanaPlanejada.avisos(), resultadoAlocacao, faixasBaixaConfiabilidade);
         return md.toString();
+    }
+
+    private static List<ConfiabilidadeFaixa> normalizarFaixasBaixaConfiabilidade(
+            List<ConfiabilidadeFaixa> faixasBaixaConfiabilidade) {
+        if (faixasBaixaConfiabilidade.isEmpty()) {
+            return List.of();
+        }
+        Map<FaixaHorario, ConfiabilidadeFaixa> unicasOrdenadas = new LinkedHashMap<>();
+        faixasBaixaConfiabilidade.stream()
+                .map(faixa -> Objects.requireNonNull(
+                        faixa, "elemento de faixasBaixaConfiabilidade não pode ser nulo"))
+                .sorted(ORDEM_FAIXAS_CONFIABILIDADE)
+                .forEach(cf -> unicasOrdenadas.putIfAbsent(cf.faixa(), cf));
+        return List.copyOf(unicasOrdenadas.values());
     }
 
     private static Map<String, String> normalizarNotasRetomada(
@@ -429,8 +464,20 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     }
 
     private static void escreverAvisos(
-            StringBuilder md, List<String> avisosSemana, ResultadoAlocacao resultadoAlocacao) {
+            StringBuilder md,
+            List<String> avisosSemana,
+            ResultadoAlocacao resultadoAlocacao,
+            List<ConfiabilidadeFaixa> faixasBaixaConfiabilidade) {
         List<String> todosAvisos = new ArrayList<>(avisosSemana);
+        for (ConfiabilidadeFaixa cf : faixasBaixaConfiabilidade) {
+            todosAvisos.add(String.format(
+                    Locale.ROOT,
+                    "Faixa %s (%s) com baixa confiabilidade (%d%%, %d amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).",
+                    nomeDiaPorExtenso(cf.faixa().diaSemana()).toLowerCase(Locale.ROOT),
+                    rotuloPeriodo(cf.faixa().periodo()),
+                    Math.round(cf.indice() * 100.0),
+                    cf.amostras()));
+        }
         if (resultadoAlocacao != null && !resultadoAlocacao.naoAlocados().isEmpty()) {
             Map<String, List<String>> porTarefa = new LinkedHashMap<>();
             for (Pedaco pedaco : resultadoAlocacao.naoAlocados()) {
@@ -519,6 +566,14 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
             case PROFUNDO -> "Bloco profundo";
             case INTERROMPIVEL -> "Bloco interrompível";
             case VIGILANCIA -> "Bloco de vigilância";
+        };
+    }
+
+    private static String rotuloPeriodo(PeriodoDia periodo) {
+        return switch (periodo) {
+            case MANHA -> "manhã";
+            case TARDE -> "tarde";
+            case NOITE -> "noite";
         };
     }
 

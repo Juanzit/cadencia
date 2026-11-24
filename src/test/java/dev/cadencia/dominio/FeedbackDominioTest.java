@@ -169,5 +169,54 @@ class FeedbackDominioTest {
         List<String> notasComNulo = Arrays.asList("Nota", null);
         assertThatNullPointerException()
                 .isThrownBy(() -> new FeedbackSemanal(2026, 48, List.of(), notasComNulo));
+
+        Semana alvoW48 = new Semana(2026, 48, List.of(), List.of());
+        assertThat(new FeedbackSemanal(2026, 47, List.of(), List.of()).ehAnteriorA(alvoW48)).isTrue();
+        assertThat(new FeedbackSemanal(2025, 52, List.of(), List.of()).ehAnteriorA(alvoW48)).isTrue();
+        assertThat(new FeedbackSemanal(2026, 48, List.of(), List.of()).ehAnteriorA(alvoW48)).isFalse();
+        assertThat(new FeedbackSemanal(2027, 1, List.of(), List.of()).ehAnteriorA(alvoW48)).isFalse();
+        assertThatNullPointerException().isThrownBy(() -> inicioLimites.ehAnteriorA(null));
+    }
+
+    @Test
+    void confiabilidadeFaixaDeveValidarCincoComponentesEConsistenciaDeAmostrasSuficientes() {
+        FaixaHorario faixa = new FaixaHorario(DayOfWeek.MONDAY, PeriodoDia.NOITE);
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> new ConfiabilidadeFaixa(null, 3, 0.50, true, false));
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, -1, 0.50, true, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, 3, -0.01, true, true))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, 3, 1.01, true, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, 3, Double.NaN, true, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, 3, Double.POSITIVE_INFINITY, true, false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ConfiabilidadeFaixa(faixa, 2, 0.0, false, true))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("amostras suficientes");
+
+        ConfiabilidadeFaixa poucasAmostras = new ConfiabilidadeFaixa(faixa, 2, 0.0, false, false);
+        assertThat(poucasAmostras.amostrasSuficientes()).isFalse();
+        assertThat(poucasAmostras.baixaConfiabilidade()).isFalse();
+
+        ConfiabilidadeFaixa noLimite = new ConfiabilidadeFaixa(faixa, 3, 0.50, true, false);
+        assertThat(noLimite.amostrasSuficientes()).isTrue();
+        assertThat(noLimite.baixaConfiabilidade()).isFalse();
+
+        ConfiabilidadeFaixa abaixoDoLimite = new ConfiabilidadeFaixa(faixa, 3, 0.49, true, true);
+        assertThat(abaixoDoLimite.amostrasSuficientes()).isTrue();
+        assertThat(abaixoDoLimite.baixaConfiabilidade()).isTrue();
+
+        assertThatThrownBy(() -> ConfiabilidadeFaixa.validarMinimoAmostras(0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ConfiabilidadeFaixa.validarLimiteConfiabilidade(-0.1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ConfiabilidadeFaixa.validarLimiteConfiabilidade(1.1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ConfiabilidadeFaixa.validarLimiteConfiabilidade(Double.NaN))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -1,5 +1,6 @@
 package dev.cadencia.dominio;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -11,6 +12,11 @@ public record FeedbackSemanal(
         int numeroIso,
         List<ItemFeedback> itens,
         List<String> notasGerais) {
+
+    /** Comparador determinístico por ordem cronológica crescente {@code (ano, numeroIso)}. */
+    public static final Comparator<FeedbackSemanal> ORDEM_CRONOLOGICA = Comparator
+            .comparingInt(FeedbackSemanal::ano)
+            .thenComparingInt(FeedbackSemanal::numeroIso);
 
     private static final int ANO_MINIMO = 2000;
     private static final int SEMANA_ISO_MINIMA = 1;
@@ -27,5 +33,14 @@ public record FeedbackSemanal(
         Objects.requireNonNull(notasGerais, "notasGerais não pode ser nulo");
         itens = List.copyOf(itens);
         notasGerais = List.copyOf(notasGerais);
+    }
+
+    /**
+     * Indica se este feedback pertence a uma semana ISO estritamente anterior à {@code semanaAlvo}.
+     */
+    public boolean ehAnteriorA(Semana semanaAlvo) {
+        Objects.requireNonNull(semanaAlvo, "semanaAlvo não pode ser nula");
+        return ano < semanaAlvo.ano()
+                || (ano == semanaAlvo.ano() && numeroIso < semanaAlvo.numeroIso());
     }
 }

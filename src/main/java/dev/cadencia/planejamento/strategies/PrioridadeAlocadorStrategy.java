@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiPredicate;
 
 /**
  * Estratégia determinística de alocação baseada em prioridade: ordena as tarefas pelo menor
@@ -37,8 +38,19 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
 
     @Override
     public ResultadoAlocacao alocar(List<Bloco> blocosDisponiveis, List<Tarefa> tarefas) {
+        return alocarComCompatibilidade(
+                blocosDisponiveis,
+                tarefas,
+                (bloco, tarefa) -> tarefa.tiposAceitos().contains(bloco.tipo()));
+    }
+
+    static ResultadoAlocacao alocarComCompatibilidade(
+            List<Bloco> blocosDisponiveis,
+            List<Tarefa> tarefas,
+            BiPredicate<Bloco, Tarefa> regraCompatibilidade) {
         Objects.requireNonNull(blocosDisponiveis, "blocosDisponiveis não pode ser nulo");
         Objects.requireNonNull(tarefas, "tarefas não pode ser nulo");
+        Objects.requireNonNull(regraCompatibilidade, "regraCompatibilidade não pode ser nula");
 
         List<Bloco> blocosCopia = List.copyOf(blocosDisponiveis);
         List<Tarefa> tarefasCopia = List.copyOf(tarefas);
@@ -59,7 +71,8 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
 
         for (Tarefa tarefa : tarefasPriorizadas) {
             for (Pedaco pedaco : tarefa.dividirEmPedacos()) {
-                SlotBloco slot = encontrarPrimeiroSlotCompativel(slots, tarefa, pedaco);
+                SlotBloco slot = encontrarPrimeiroSlotCompativel(
+                        slots, tarefa, pedaco, regraCompatibilidade);
                 if (slot != null) {
                     alocados.add(slot.alocar(pedaco));
                 } else {
@@ -73,9 +86,12 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
     }
 
     private static SlotBloco encontrarPrimeiroSlotCompativel(
-            List<SlotBloco> slots, Tarefa tarefa, Pedaco pedaco) {
+            List<SlotBloco> slots,
+            Tarefa tarefa,
+            Pedaco pedaco,
+            BiPredicate<Bloco, Tarefa> regraCompatibilidade) {
         for (SlotBloco slot : slots) {
-            if (slot.aceita(tarefa, pedaco)) {
+            if (slot.aceita(tarefa, pedaco, regraCompatibilidade)) {
                 return slot;
             }
         }
@@ -92,8 +108,9 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
             this.proximoInicio = bloco.inicio();
         }
 
-        private boolean aceita(Tarefa tarefa, Pedaco pedaco) {
-            if (!tarefa.tiposAceitos().contains(bloco.tipo())) {
+        private boolean aceita(
+                Tarefa tarefa, Pedaco pedaco, BiPredicate<Bloco, Tarefa> regraCompatibilidade) {
+            if (!regraCompatibilidade.test(bloco, tarefa)) {
                 return false;
             }
             // Compara em nanossegundos para nunca ocorrer wrap-around de LocalTime perto de 00:00.

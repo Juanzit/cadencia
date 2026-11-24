@@ -18,6 +18,7 @@ import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.YamlBacklogRepository;
+import dev.cadencia.planejamento.strategies.ConfiabilidadeAlocadorStrategy;
 import dev.cadencia.planejamento.strategies.PrioridadeAlocadorStrategy;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
@@ -334,6 +335,71 @@ class FeedbackServiceTest {
             feedbackRepo.salvar(dadosTemp.resolve("feedback/2026-W49.md"), futuroW49);
             assertThat(service.resolverNotasRetomada(semanaW48)).isEqualTo(notasParaW48);
             assertThat(service.resolverNotasRetomada(semanaW49)).isEqualTo(notasParaW49);
+        }
+    }
+
+    @Test
+    void deveGerarModeloConsiderandoConfiabilidadeQuandoConfiabilidadeServiceForInjetado()
+            throws IOException {
+        Path dadosTemp = tempDir.resolve("dados-modelo-confiabilidade");
+        Files.createDirectories(dadosTemp);
+        Files.copy(Path.of("exemplos/agenda.exemplo.yaml"), dadosTemp.resolve("agenda.yaml"));
+        Files.writeString(dadosTemp.resolve("backlog.yaml"), """
+                tarefas:
+                  - id: "core"
+                    titulo: "Java Core"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                  - id: "junit"
+                    titulo: "Testes JUnit"
+                    duracao_total_min: 25
+                    tipos_aceitos: [PROFUNDO, INTERROMPIVEL]
+                    prioridade: 2
+                """, StandardCharsets.UTF_8);
+
+        FeedbackRepository feedbackRepo = new MarkdownFeedbackRepository();
+        for (int iso = 45; iso <= 47; iso++) {
+            feedbackRepo.salvar(
+                    dadosTemp.resolve("feedback/2026-W" + iso + ".md"),
+                    new FeedbackSemanal(
+                            2026,
+                            iso,
+                            List.of(new ItemFeedback(
+                                    DayOfWeek.MONDAY,
+                                    LocalTime.of(7, 0),
+                                    LocalTime.of(7, 25),
+                                    "Java",
+                                    StatusBloco.NAO_ACONTECEU,
+                                    null)),
+                            List.of()));
+        }
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+            AgendaService agendaService = new AgendaService(
+                    new YamlAgendaRepository(yamlMapper, factory.getValidator()), RELOGIO_W48);
+            BacklogRepository backlogRepo = new YamlBacklogRepository(yamlMapper, factory.getValidator());
+            PlanejamentoService planejamento = new PlanejamentoService(new ConfiabilidadeAlocadorStrategy());
+            ConfiabilidadeService confiabilidadeService = new ConfiabilidadeService(feedbackRepo, dadosTemp);
+
+            assertThatNullPointerException().isThrownBy(() -> new FeedbackService(
+                    agendaService, backlogRepo, planejamento, feedbackRepo, null, dadosTemp));
+
+            FeedbackService service = new FeedbackService(
+                    agendaService,
+                    backlogRepo,
+                    planejamento,
+                    feedbackRepo,
+                    confiabilidadeService,
+                    dadosTemp);
+
+            ModeloFeedbackGerado gerado = service.gerarModelo(null, null, null, false);
+            assertThat(gerado.feedbackSemanal().itens()).hasSize(2);
+            assertThat(gerado.feedbackSemanal().itens().get(0).titulo()).isEqualTo("Testes JUnit (1/1)");
+            assertThat(gerado.feedbackSemanal().itens().get(0).inicio()).isEqualTo(LocalTime.of(7, 0));
+            assertThat(gerado.feedbackSemanal().itens().get(1).titulo()).isEqualTo("Java Core (1/1)");
+            assertThat(gerado.feedbackSemanal().itens().get(1).inicio()).isEqualTo(LocalTime.of(13, 10));
         }
     }
 }
