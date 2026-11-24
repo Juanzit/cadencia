@@ -76,11 +76,16 @@ cadencia/
     │       ├── BlocoManual.java
     │       ├── Classificacao.java
     │       ├── Compromisso.java
+    │       ├── FaixaHorario.java
+    │       ├── FeedbackSemanal.java
+    │       ├── ItemFeedback.java
     │       ├── Jornada.java
     │       ├── MargemEmpresa.java
     │       ├── Margens.java
     │       ├── Pedaco.java
+    │       ├── PeriodoDia.java
     │       ├── Semana.java
+    │       ├── StatusBloco.java
     │       ├── Tarefa.java
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
@@ -109,6 +114,10 @@ turmas.csv ───> TurmaRepository ───> PrevisaoTurmaService ───�
 * `AgendaConfiguracao`: configuração completa imutável da agenda (`Jornada`, `Margens` com `MargemEmpresa` por empresa, `Classificacao`, lista de `Compromisso` e lista de `BlocoManual`).
 * `Tarefa`: id, título, duração total, tipos aceitos, tamanho do pedaço, prioridade.
 * `Pedaco`: referência imutável à `Tarefa`, `numero`, `total` e duração positiva da fração (`numero/total`).
+* `StatusBloco`: enum determinístico (`CONCLUIDO` = `1.0`, `INTERROMPIDO` = `0.5`, `NAO_ACONTECEU` = `0.0`).
+* `PeriodoDia` e `FaixaHorario`: agrupamento estatístico determinístico por `(DayOfWeek, PeriodoDia)` (`MANHA < 12:00`, `TARDE 12:00–17:59`, `NOITE >= 18:00`).
+* `ItemFeedback`: registro imutável por dia/horário (com `fim` opcional e nota normalizada `"parei aqui"`), status e derivação de `FaixaHorario`.
+* `FeedbackSemanal`: feedback consolidado de uma semana ISO (`ano >= 2000`, `1 <= numeroIso <= 53`, listas imutáveis de itens e notas gerais).
 * `Turma`: código, empresa, módulo atual, início do módulo, duração em semanas.
 * `Semana`: ano, número ISO, lista de compromissos e blocos.
 
