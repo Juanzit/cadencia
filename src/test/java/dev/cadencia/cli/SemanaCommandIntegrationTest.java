@@ -411,8 +411,8 @@ class SemanaCommandIntegrationTest {
                     diretorioDadosTemporario.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
             assertThat(mdW48)
                     .contains("- [ ] seg 07:00–07:25 · Java Collections (1/3) — retomar: parei no card 12\n")
-                    .contains("- [ ] seg 07:25–07:50 · Java Collections (2/3)\n")
-                    .contains("- [ ] seg 07:50–08:15 · Java Collections (3/3)\n")
+                    .contains("- [ ] ter 07:00–07:25 · Java Collections (2/3)\n")
+                    .contains("- [ ] qua 13:40–14:05 · Java Collections (3/3)\n")
                     .doesNotContain("nota futura ignorada");
             assertThat(mdW48.split("— retomar:", -1)).hasSize(2);
 
@@ -508,10 +508,11 @@ class SemanaCommandIntegrationTest {
             String markdown = Files.readString(
                     diretorioDadosTemporario.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
             assertThat(markdown).contains(
-                    "| 07:00–07:25 | **Bloco profundo** | Testes JUnit (1/2) |",
-                    "| 07:25–07:50 | **Bloco profundo** | Testes JUnit (2/2) |",
+                    "| 07:00–08:30 | **Bloco profundo** | Disponível (1h30) |",
                     "| 13:10–13:35 | **Bloco profundo** | Java Core (1/2) |",
-                    "| 13:35–14:00 | **Bloco profundo** | Java Core (2/2) |",
+                    "- [ ] ter 07:00–07:25 · Java Core (2/2)",
+                    "- [ ] qua 07:00–07:25 · Testes JUnit (1/2)",
+                    "- [ ] qui 07:00–07:25 · Testes JUnit (2/2)",
                     "Faixa segunda-feira (manhã) com baixa confiabilidade (0%, 3 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).");
 
             // Feedback histórico inválido com --backlog retorna código 2 sem stack trace

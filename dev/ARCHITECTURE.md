@@ -49,7 +49,7 @@ cadencia/
     │   │   ├── PlanejamentoService.java     # orquestra compatibilidade individual, folga mínima configurável e sobrecarga com confiabilidade (1.4–1.6, ADR-013)
     │   │   └── strategies/
     │   │       ├── AlocadorStrategy.java            # contrato Strategy determinístico de alocação com suporte opcional à confiabilidade (1.3, 1.6, ADR-013)
-    │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3, ADR-013)
+    │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro, roadmap no empate e balanceamento por menor carga diária (1.3, ADR-013, ADR-015)
     │   │       └── ConfiabilidadeAlocadorStrategy.java # fábrica `comConfiabilidade` e proteção de blocos PROFUNDO degradados aceitando qualquer tarefa `INTERROMPIVEL` (1.6)
     │   ├── feedback/             # módulo de feedback e confiabilidade
     │   │   ├── FeedbackRepository.java          # porta de existência, leitura, histórico cronológico e gravação de feedback (1.1, 1.3)

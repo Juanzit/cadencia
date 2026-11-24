@@ -343,32 +343,30 @@ class MarkdownSemanalExportadorTest {
                     | Horário | Tipo | Detalhe |
                     | :--- | :--- | :--- |
                     | 07:00–07:25 | **Bloco profundo** | Java Collections (1/6) |
-                    | 07:25–07:50 | **Bloco profundo** | Java Collections (2/6) |
-                    | 07:50–08:15 | **Bloco profundo** | Java Collections (3/6) |
+                    | 07:25–08:20 | **Bloco profundo** | Disponível (0h55) |
                     | 08:30–09:00 | Margem | Margem antes (EmpresaA) |
                     | 09:00–11:00 | Aula | EmpresaA · UNIDADE_CENTRO · Turma T01 |
                     | 11:00–11:30 | Deslocamento | TRANSITO · Retorno para casa |
                     | 11:30–12:00 | Bloco interrompível | Disponível (0h30) |
                     | 12:00–13:00 | Almoço | CASA · Almoço |
-                    | 13:10–13:35 | **Bloco profundo** | Java Collections (4/6) |
-                    | 13:35–14:00 | **Bloco profundo** | Java Collections (5/6) |
-                    | 14:00–14:25 | **Bloco profundo** | Java Collections (6/6) |
-                    | 14:25–15:20 | **Bloco profundo** | Disponível (0h55) |
+                    | 13:00–15:30 | **Bloco profundo** | Disponível (2h30) |
                     """);
             assertThat(primeira).contains(
+                    "| 07:00–07:25 | **Bloco profundo** | Java Collections (2/6) |",
                     "| 07:00–07:25 | Bloco interrompível | Flashcards Java (1/2) |",
                     "| 07:25–07:50 | Bloco interrompível | Flashcards Java (2/2) |",
+                    "| 13:40–14:05 | **Bloco profundo** | Java Collections (3/6) |",
                     "| 07:00–23:00 | **Bloco profundo** | Disponível (16h00) |");
             assertThat(primeira).contains("""
                     ## Checklist de estudos
                     - [ ] seg 07:00–07:25 · Java Collections (1/6)
-                    - [ ] seg 07:25–07:50 · Java Collections (2/6)
-                    - [ ] seg 07:50–08:15 · Java Collections (3/6)
-                    - [ ] seg 13:10–13:35 · Java Collections (4/6)
-                    - [ ] seg 13:35–14:00 · Java Collections (5/6)
-                    - [ ] seg 14:00–14:25 · Java Collections (6/6)
+                    - [ ] ter 07:00–07:25 · Java Collections (2/6)
                     - [ ] qua 07:00–07:25 · Flashcards Java (1/2)
                     - [ ] qua 07:25–07:50 · Flashcards Java (2/2)
+                    - [ ] qua 13:40–14:05 · Java Collections (3/6)
+                    - [ ] qui 07:00–07:25 · Java Collections (4/6)
+                    - [ ] sex 07:00–07:25 · Java Collections (5/6)
+                    - [ ] sáb 07:00–07:25 · Java Collections (6/6)
 
                     ## Avisos
                     - Nenhum aviso.

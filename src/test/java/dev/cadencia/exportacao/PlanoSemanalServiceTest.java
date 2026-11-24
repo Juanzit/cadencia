@@ -206,7 +206,8 @@ class PlanoSemanalServiceTest {
             assertThat(comPadrao.resultadoAlocacao().alocados()).hasSize(2);
             assertThat(Files.readString(comPadrao.arquivoSaida(), StandardCharsets.UTF_8))
                     .contains("| 07:00–07:25 | **Bloco profundo** | Java Collections (1/2) |")
-                    .contains("- [ ] seg 07:25–07:50 · Java Collections (2/2)");
+                    .contains("- [ ] seg 07:00–07:25 · Java Collections (1/2)")
+                    .contains("- [ ] ter 07:00–07:25 · Java Collections (2/2)");
 
             PlanoSemanalGerado comExplicito = service.gerarEExportar(null, backlogAlternativo, null);
             assertThat(comExplicito.resultadoAlocacao()).isNotNull();
@@ -279,8 +280,8 @@ class PlanoSemanalServiceTest {
             assertThat(markdown).contains("""
                     ## Checklist de estudos
                     - [ ] seg 07:00–07:25 · Java Collections (1/3) — retomar: parei no card 12
-                    - [ ] seg 07:25–07:50 · Java Collections (2/3)
-                    - [ ] seg 07:50–08:15 · Java Collections (3/3)
+                    - [ ] ter 07:00–07:25 · Java Collections (2/3)
+                    - [ ] qua 13:40–14:05 · Java Collections (3/3)
                     """);
             assertThat(markdown.split("— retomar:", -1)).hasSize(2);
         }

@@ -171,6 +171,52 @@ class ConfiabilidadeAlocadorStrategyTest {
         assertThat(resultado.naoAlocados().get(0).tarefa().id()).isEqualTo("core");
     }
 
+    @Test
+    void deveEquilibrarCargaEntreDiasComConfiabilidadePreservandoRestricaoEIdempotencia() {
+        FaixaHorario segManhaRuim = new FaixaHorario(DayOfWeek.MONDAY, PeriodoDia.MANHA);
+        Map<FaixaHorario, ConfiabilidadeFaixa> mapa = Map.of(
+                segManhaRuim, new ConfiabilidadeFaixa(segManhaRuim, 4, 0.25, true, true));
+        ConfiabilidadeAlocadorStrategy strategy =
+                ConfiabilidadeAlocadorStrategy.comConfiabilidade(mapa);
+
+        List<Bloco> blocos = List.of(
+                new Bloco(SEGUNDA, LocalTime.of(7, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(SEGUNDA, LocalTime.of(13, 0), LocalTime.of(15, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(TERCA, LocalTime.of(7, 0), LocalTime.of(9, 0), TipoBloco.PROFUNDO, null));
+
+        // 50 min exclusivo PROFUNDO (p1): seg manhã recusado -> 1/2 Seg 13:00 (25m), 2/2 Ter 07:00 (25m)
+        Tarefa profundo = tarefa("core", "Java Core", 50, List.of(TipoBloco.PROFUNDO), 1);
+        // 25 min INTERROMPIVEL (p2): Seg=25m, Ter=25m -> desempate cronológico -> Seg 07:00 (PROFUNDO degradado aceita!)
+        Tarefa somenteInterrompivel =
+                tarefa("cards", "Flashcards", 25, List.of(TipoBloco.INTERROMPIVEL), 2);
+        // 25 min [PROFUNDO, INTERROMPIVEL] (p3): Ter=25 < Seg=50 -> vai para Ter 07:25
+        Tarefa flexivel =
+                tarefa("junit", "Testes JUnit", 25, List.of(TipoBloco.PROFUNDO, TipoBloco.INTERROMPIVEL), 3);
+
+        ResultadoAlocacao primeira = strategy.alocar(blocos, List.of(profundo, somenteInterrompivel, flexivel));
+        ResultadoAlocacao segunda = strategy.alocar(blocos, List.of(profundo, somenteInterrompivel, flexivel));
+
+        assertThat(primeira).isEqualTo(segunda);
+        assertThat(primeira.naoAlocados()).isEmpty();
+        assertThat(primeira.alocados()).hasSize(4);
+
+        assertThat(primeira.alocados().get(0).data()).isEqualTo(SEGUNDA);
+        assertThat(primeira.alocados().get(0).inicio()).isEqualTo(LocalTime.of(7, 0));
+        assertThat(primeira.alocados().get(0).pedaco().tarefa().id()).isEqualTo("cards");
+
+        assertThat(primeira.alocados().get(1).data()).isEqualTo(SEGUNDA);
+        assertThat(primeira.alocados().get(1).inicio()).isEqualTo(LocalTime.of(13, 0));
+        assertThat(primeira.alocados().get(1).pedaco().tarefa().id()).isEqualTo("core");
+
+        assertThat(primeira.alocados().get(2).data()).isEqualTo(TERCA);
+        assertThat(primeira.alocados().get(2).inicio()).isEqualTo(LocalTime.of(7, 0));
+        assertThat(primeira.alocados().get(2).pedaco().tarefa().id()).isEqualTo("core");
+
+        assertThat(primeira.alocados().get(3).data()).isEqualTo(TERCA);
+        assertThat(primeira.alocados().get(3).inicio()).isEqualTo(LocalTime.of(7, 25));
+        assertThat(primeira.alocados().get(3).pedaco().tarefa().id()).isEqualTo("junit");
+    }
+
     private static Tarefa tarefa(
             String id, String titulo, int minutos, List<TipoBloco> tiposAceitos, int prioridade) {
         return new Tarefa(id, titulo, Duration.ofMinutes(minutos), tiposAceitos, prioridade);

@@ -396,10 +396,12 @@ class FeedbackServiceTest {
 
             ModeloFeedbackGerado gerado = service.gerarModelo(null, null, null, false);
             assertThat(gerado.feedbackSemanal().itens()).hasSize(2);
-            assertThat(gerado.feedbackSemanal().itens().get(0).titulo()).isEqualTo("Testes JUnit (1/1)");
-            assertThat(gerado.feedbackSemanal().itens().get(0).inicio()).isEqualTo(LocalTime.of(7, 0));
-            assertThat(gerado.feedbackSemanal().itens().get(1).titulo()).isEqualTo("Java Core (1/1)");
-            assertThat(gerado.feedbackSemanal().itens().get(1).inicio()).isEqualTo(LocalTime.of(13, 10));
+            assertThat(gerado.feedbackSemanal().itens().get(0).titulo()).isEqualTo("Java Core (1/1)");
+            assertThat(gerado.feedbackSemanal().itens().get(0).diaSemana()).isEqualTo(DayOfWeek.MONDAY);
+            assertThat(gerado.feedbackSemanal().itens().get(0).inicio()).isEqualTo(LocalTime.of(13, 10));
+            assertThat(gerado.feedbackSemanal().itens().get(1).titulo()).isEqualTo("Testes JUnit (1/1)");
+            assertThat(gerado.feedbackSemanal().itens().get(1).diaSemana()).isEqualTo(DayOfWeek.TUESDAY);
+            assertThat(gerado.feedbackSemanal().itens().get(1).inicio()).isEqualTo(LocalTime.of(7, 0));
         }
     }
 }

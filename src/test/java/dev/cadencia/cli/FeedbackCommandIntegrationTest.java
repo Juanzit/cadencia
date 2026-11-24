@@ -116,7 +116,8 @@ class FeedbackCommandIntegrationTest {
                 .doesNotContain("\r")
                 .startsWith("# Feedback 2026-W48\n")
                 .contains("- [ ] seg 07:00–07:25 · Java Core: Streams, Lambdas e Records (1/4) | NAO_ACONTECEU\n")
-                .contains("- [ ] qua 15:00–15:20 · Flashcards e Revisão Leve de Conceitos Java (3/3) | NAO_ACONTECEU\n");
+                .contains("- [ ] qua 15:20–15:40 · Flashcards e Revisão Leve de Conceitos Java (3/3) | NAO_ACONTECEU\n")
+                .contains("- [ ] dom 07:25–07:50 · Spring Boot: Web, Validação e Arquitetura (4/6) | NAO_ACONTECEU\n");
         FeedbackSemanal carregado = feedbackRepository.carregar(destino);
         assertThat(carregado.itens()).hasSize(30);
 

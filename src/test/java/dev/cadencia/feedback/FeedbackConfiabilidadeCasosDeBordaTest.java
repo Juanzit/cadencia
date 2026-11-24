@@ -322,9 +322,9 @@ class FeedbackConfiabilidadeCasosDeBordaTest {
         String mdW48 = new String(bytes1, StandardCharsets.UTF_8);
         assertThat(mdW48)
                 .doesNotContain("\r")
-                .contains("| 07:00–07:25 | **Bloco profundo** | Testes com JUnit 5, AssertJ e Mockito (1/4) |")
+                .contains("| 07:00–07:25 | **Bloco profundo** | Testes com JUnit 5, AssertJ e Mockito (3/4) |")
                 .contains("| 13:10–13:35 | **Bloco profundo** | Java Core: Streams, Lambdas e Records (1/4) |")
-                .contains("- [ ] seg 14:50–15:15 · Java Collections e Complexidade (1/6) — retomar: parei no exercício 7 de TreeMap")
+                .contains("- [ ] seg 13:35–14:00 · Java Collections e Complexidade (4/6) — retomar: parei no exercício 7 de TreeMap")
                 .contains("Faixa segunda-feira (manhã) com baixa confiabilidade (0%, 3 amostra(s)): blocos profundos aceitarão apenas tarefas interrompíveis (INTERROMPIVEL).");
         assertThat(mdW48.split("— retomar:", -1)).hasSize(2);
     }

@@ -220,7 +220,37 @@ class AlocacaoCasosDeBordaTest {
                 classificacao:
                   profundo_minimo_min: 60
                   interrompivel_minimo_min: 25
-                compromissos: []
+                compromissos:
+                  - dia: TERCA
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUARTA
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUINTA
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SEXTA
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SABADO
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: DOMINGO
+                    inicio: "08:00"
+                    fim: "09:15"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
                 """);
         Path backlog = escreverYaml(tempDir.resolve("backlog-empate.yaml"), """
                 tarefas:
@@ -278,6 +308,36 @@ class AlocacaoCasosDeBordaTest {
                     fim: "21:00"
                     tipo: REUNIAO
                     titulo: "Fechamento"
+                  - dia: TERCA
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUARTA
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUINTA
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SEXTA
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SABADO
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: DOMINGO
+                    inicio: "07:00"
+                    fim: "21:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
                 """);
         Path backlog = escreverYaml(tempDir.resolve("backlog-65min.yaml"), """
                 tarefas:
@@ -330,6 +390,36 @@ class AlocacaoCasosDeBordaTest {
                     fim: "12:00"
                     tipo: AULA
                     titulo: "Aula Java"
+                  - dia: TERCA
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUARTA
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: QUINTA
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SEXTA
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: SABADO
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
+                  - dia: DOMINGO
+                    inicio: "07:00"
+                    fim: "13:00"
+                    tipo: REUNIAO
+                    titulo: "Dia ocupado"
                 """);
         Path backlog = escreverYaml(tempDir.resolve("backlog-folga.yaml"), """
                 tarefas:
@@ -407,6 +497,17 @@ class AlocacaoCasosDeBordaTest {
                         "Flashcards e Revisão Leve de Conceitos Java (3/3)",
                         "## Checklist de estudos",
                         "## Avisos\n- Nenhum aviso.\n");
+        assertThat(primeira.resultadoAlocacao().alocados())
+                .extracting(PedacoAlocado::data)
+                .doesNotHaveSameClassAs(Object.class)
+                .containsAll(List.of(
+                        LocalDate.of(2026, 11, 23),
+                        LocalDate.of(2026, 11, 24),
+                        LocalDate.of(2026, 11, 25),
+                        LocalDate.of(2026, 11, 26),
+                        LocalDate.of(2026, 11, 27),
+                        LocalDate.of(2026, 11, 28),
+                        LocalDate.of(2026, 11, 29)));
     }
 
     private PlanoSemanalGerado executarFluxoCompleto(

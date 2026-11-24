@@ -50,7 +50,7 @@ class PrioridadeAlocadorStrategyTest {
     @Test
     void deveAlocarSequencialmenteEmBlocosOrdenadosCronologicamenteComPedacoFinalMenor() {
         List<Bloco> blocosForaDeOrdem = List.of(
-                new Bloco(TERCA, LocalTime.of(20, 0), LocalTime.of(21, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(TERCA, LocalTime.of(20, 0), LocalTime.of(21, 5), TipoBloco.PROFUNDO, null),
                 new Bloco(SEGUNDA, LocalTime.of(8, 0), LocalTime.of(8, 50), TipoBloco.PROFUNDO, null));
 
         Tarefa collections = tarefa("collections", "Java Collections", 65, List.of(TipoBloco.PROFUNDO), 1);
@@ -68,9 +68,9 @@ class PrioridadeAlocadorStrategyTest {
         assertThat(resultado.alocados()).hasSize(4);
 
         assertAlocacao(resultado.alocados().get(0), SEGUNDA, "08:00", "08:25", "collections", 1, 3);
-        assertAlocacao(resultado.alocados().get(1), SEGUNDA, "08:25", "08:50", "collections", 2, 3);
-        assertAlocacao(resultado.alocados().get(2), TERCA, "20:00", "20:15", "collections", 3, 3);
-        assertAlocacao(resultado.alocados().get(3), TERCA, "20:15", "20:55", "revisao", 1, 1);
+        assertAlocacao(resultado.alocados().get(1), SEGUNDA, "08:25", "08:40", "collections", 3, 3);
+        assertAlocacao(resultado.alocados().get(2), TERCA, "20:00", "20:25", "collections", 2, 3);
+        assertAlocacao(resultado.alocados().get(3), TERCA, "20:25", "21:05", "revisao", 1, 1);
     }
 
     @Test
@@ -112,11 +112,12 @@ class PrioridadeAlocadorStrategyTest {
         assertThat(resultado.alocados()).hasSize(4);
 
         assertAlocacao(resultado.alocados().get(0), SEGUNDA, "08:00", "08:25", "flashcards", 1, 2);
-        assertAlocacao(resultado.alocados().get(1), SEGUNDA, "08:25", "08:50", "flashcards", 2, 2);
-        assertAlocacao(resultado.alocados().get(2), TERCA, "20:00", "20:25", "spring-boot", 1, 2);
-        assertAlocacao(resultado.alocados().get(3), TERCA, "20:25", "20:50", "spring-boot", 2, 2);
+        assertAlocacao(resultado.alocados().get(1), TERCA, "20:00", "20:25", "spring-boot", 1, 2);
+        assertAlocacao(resultado.alocados().get(2), TERCA, "20:25", "20:50", "spring-boot", 2, 2);
+        assertAlocacao(resultado.alocados().get(3), QUARTA, "14:00", "14:25", "flashcards", 2, 2);
         assertThat(resultado.alocados().get(0).blocoOrigem().tipo()).isEqualTo(TipoBloco.VIGILANCIA);
-        assertThat(resultado.alocados().get(2).blocoOrigem().tipo()).isEqualTo(TipoBloco.PROFUNDO);
+        assertThat(resultado.alocados().get(1).blocoOrigem().tipo()).isEqualTo(TipoBloco.PROFUNDO);
+        assertThat(resultado.alocados().get(3).blocoOrigem().tipo()).isEqualTo(TipoBloco.INTERROMPIVEL);
     }
 
     @Test
@@ -191,6 +192,90 @@ class PrioridadeAlocadorStrategyTest {
         List<Tarefa> tarefasComNulo = new ArrayList<>();
         tarefasComNulo.add(null);
         assertThatNullPointerException().isThrownBy(() -> strategy.alocar(List.of(bloco), tarefasComNulo));
+    }
+
+    @Test
+    void deveDistribuirEntreDiasDeMenorCargaEDesempatarCronologicamenteComIdempotencia() {
+        LocalDate quinta = QUARTA.plusDays(1);
+        List<Bloco> blocos = List.of(
+                new Bloco(quinta, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(SEGUNDA, LocalTime.of(7, 0), LocalTime.of(12, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(QUARTA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(TERCA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null));
+
+        // 4 pedaços de 25 min -> 1 por dia com carga equilibrada (25 min em Seg, Ter, Qua, Qui)
+        Tarefa java = tarefa("java", "Java Core", 100, List.of(TipoBloco.PROFUNDO), 1);
+
+        ResultadoAlocacao primeira = strategy.alocar(blocos, List.of(java));
+        ResultadoAlocacao segunda = strategy.alocar(blocos, List.of(java));
+
+        assertThat(primeira).isEqualTo(segunda);
+        assertThat(primeira.naoAlocados()).isEmpty();
+        assertThat(primeira.alocados()).hasSize(4);
+        assertAlocacao(primeira.alocados().get(0), SEGUNDA, "07:00", "07:25", "java", 1, 4);
+        assertAlocacao(primeira.alocados().get(1), TERCA, "08:00", "08:25", "java", 2, 4);
+        assertAlocacao(primeira.alocados().get(2), QUARTA, "08:00", "08:25", "java", 3, 4);
+        assertAlocacao(primeira.alocados().get(3), quinta, "08:00", "08:25", "java", 4, 4);
+    }
+
+    @Test
+    void deveBalancearPelaSomaDaDuracaoAlocadaQuandoPedacosTiveremDuracoesDiferentes() {
+        List<Bloco> blocos = List.of(
+                new Bloco(SEGUNDA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(TERCA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null));
+
+        // Prio 1: 45 min (1 pedaço -> Seg=45)
+        Tarefa longa = new Tarefa(
+                "longa",
+                "Projeto",
+                Duration.ofMinutes(45),
+                List.of(TipoBloco.PROFUNDO),
+                Duration.ofMinutes(45),
+                1);
+        // Prio 2: 40 min divididos em 20 + 20 (Ter=0 -> 1/2 vai para Ter=20; Ter=20 < Seg=45 -> 2/2 vai para Ter=40)
+        Tarefa media = new Tarefa(
+                "media",
+                "Leitura",
+                Duration.ofMinutes(40),
+                List.of(TipoBloco.PROFUNDO),
+                Duration.ofMinutes(20),
+                2);
+        // Prio 3: 15 min -> Ter=40 < Seg=45 -> também vai para Ter (carga final Ter=55, Seg=45; antes não conta quantidade de pedaços!)
+        Tarefa curta = new Tarefa(
+                "curta",
+                "Revisão",
+                Duration.ofMinutes(15),
+                List.of(TipoBloco.PROFUNDO),
+                Duration.ofMinutes(15),
+                3);
+
+        ResultadoAlocacao resultado = strategy.alocar(blocos, List.of(curta, longa, media));
+
+        assertThat(resultado.naoAlocados()).isEmpty();
+        assertThat(resultado.alocados()).hasSize(4);
+        assertAlocacao(resultado.alocados().get(0), SEGUNDA, "08:00", "08:45", "longa", 1, 1);
+        assertAlocacao(resultado.alocados().get(1), TERCA, "08:00", "08:20", "media", 1, 2);
+        assertAlocacao(resultado.alocados().get(2), TERCA, "08:20", "08:40", "media", 2, 2);
+        assertAlocacao(resultado.alocados().get(3), TERCA, "08:40", "08:55", "curta", 1, 1);
+    }
+
+    @Test
+    void deveConcentrarEmUmUnicoDiaEPreservarPrioridadeQuandoOutrosDiasNaoForemCompativeis() {
+        List<Bloco> blocos = List.of(
+                new Bloco(SEGUNDA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.PROFUNDO, null),
+                new Bloco(TERCA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.INTERROMPIVEL, null),
+                new Bloco(QUARTA, LocalTime.of(8, 0), LocalTime.of(10, 0), TipoBloco.VIGILANCIA, null));
+
+        Tarefa urgente = tarefa("urgente", "Arquitetura", 50, List.of(TipoBloco.PROFUNDO), 1);
+        Tarefa secundaria = tarefa("secundaria", "Testes", 25, List.of(TipoBloco.PROFUNDO), 2);
+
+        ResultadoAlocacao resultado = strategy.alocar(blocos, List.of(secundaria, urgente));
+
+        assertThat(resultado.naoAlocados()).isEmpty();
+        assertThat(resultado.alocados()).hasSize(3);
+        assertAlocacao(resultado.alocados().get(0), SEGUNDA, "08:00", "08:25", "urgente", 1, 2);
+        assertAlocacao(resultado.alocados().get(1), SEGUNDA, "08:25", "08:50", "urgente", 2, 2);
+        assertAlocacao(resultado.alocados().get(2), SEGUNDA, "08:50", "09:15", "secundaria", 1, 1);
     }
 
     private static Tarefa tarefa(

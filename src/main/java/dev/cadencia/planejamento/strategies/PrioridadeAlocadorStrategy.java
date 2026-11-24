@@ -6,18 +6,22 @@ import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.planejamento.PedacoAlocado;
 import dev.cadencia.planejamento.ResultadoAlocacao;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiPredicate;
 
 /**
- * Estratégia determinística de alocação baseada em prioridade: ordena as tarefas pelo menor
- * número de {@link Tarefa#prioridade()} primeiro, preservando em caso de empate a ordem declarada
- * no roadmap, e aloca cada {@link Pedaco} no primeiro {@link Bloco} cronologicamente disponível e
- * compatível.
+ * Estratégia determinística de alocação baseada em prioridade e balanceamento diário: ordena as
+ * tarefas pelo menor número de {@link Tarefa#prioridade()} primeiro, preservando em caso de empate
+ * a ordem declarada no roadmap, e para cada {@link Pedaco} seleciona entre os {@link Bloco}s
+ * compatíveis aquele cuja data possui a menor carga já alocada na semana (em nanossegundos),
+ * desempatando cronologicamente por {@code (data, inicio, fim, tipo)}.
  *
  * <p>O filtro individual por {@link Tarefa#tiposAceitos()} é aplicado diretamente na seleção do
  * bloco para cada pedaço; caso haja empate total em {@code (data, inicio, fim, tipo)}, a ordem
@@ -66,15 +70,18 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
                 .sorted(Comparator.comparingInt(Tarefa::prioridade))
                 .toList();
 
+        Map<LocalDate, Long> cargaPorDiaNanos = new HashMap<>();
         List<PedacoAlocado> alocados = new ArrayList<>();
         List<Pedaco> naoAlocados = new ArrayList<>();
 
         for (Tarefa tarefa : tarefasPriorizadas) {
             for (Pedaco pedaco : tarefa.dividirEmPedacos()) {
-                SlotBloco slot = encontrarPrimeiroSlotCompativel(
-                        slots, tarefa, pedaco, regraCompatibilidade);
+                SlotBloco slot = encontrarSlotMenorCargaDiaria(
+                        slots, tarefa, pedaco, regraCompatibilidade, cargaPorDiaNanos);
                 if (slot != null) {
-                    alocados.add(slot.alocar(pedaco));
+                    PedacoAlocado alocado = slot.alocar(pedaco);
+                    alocados.add(alocado);
+                    cargaPorDiaNanos.merge(alocado.data(), pedaco.duracao().toNanos(), Long::sum);
                 } else {
                     naoAlocados.add(pedaco);
                 }
@@ -85,17 +92,25 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
         return new ResultadoAlocacao(alocados, naoAlocados);
     }
 
-    private static SlotBloco encontrarPrimeiroSlotCompativel(
+    private static SlotBloco encontrarSlotMenorCargaDiaria(
             List<SlotBloco> slots,
             Tarefa tarefa,
             Pedaco pedaco,
-            BiPredicate<Bloco, Tarefa> regraCompatibilidade) {
+            BiPredicate<Bloco, Tarefa> regraCompatibilidade,
+            Map<LocalDate, Long> cargaPorDiaNanos) {
+        SlotBloco melhorSlot = null;
+        long menorCargaNanos = Long.MAX_VALUE;
         for (SlotBloco slot : slots) {
-            if (slot.aceita(tarefa, pedaco, regraCompatibilidade)) {
-                return slot;
+            if (!slot.aceita(tarefa, pedaco, regraCompatibilidade)) {
+                continue;
+            }
+            long cargaDiaNanos = cargaPorDiaNanos.getOrDefault(slot.data(), 0L);
+            if (melhorSlot == null || cargaDiaNanos < menorCargaNanos) {
+                melhorSlot = slot;
+                menorCargaNanos = cargaDiaNanos;
             }
         }
-        return null;
+        return melhorSlot;
     }
 
     private static final class SlotBloco {
@@ -106,6 +121,10 @@ public class PrioridadeAlocadorStrategy implements AlocadorStrategy {
         private SlotBloco(Bloco bloco) {
             this.bloco = bloco;
             this.proximoInicio = bloco.inicio();
+        }
+
+        private LocalDate data() {
+            return bloco.data();
         }
 
         private boolean aceita(

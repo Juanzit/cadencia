@@ -153,8 +153,8 @@ class CadenciaApplicationTest {
         String markdown = Files.readString(dadosCustom.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
         assertThat(markdown).contains(
                 "- Pedaços alocados: 2 (1h10)",
-                "| 07:00–07:35 | **Bloco profundo** | Java Streams (1/2) |",
-                "| 07:35–08:10 | **Bloco profundo** | Java Streams (2/2) |");
+                "- [ ] seg 07:00–07:35 · Java Streams (1/2)",
+                "- [ ] ter 07:00–07:35 · Java Streams (2/2)");
     }
 
     @Test
