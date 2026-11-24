@@ -444,12 +444,17 @@ class GerarSemanaScriptTest {
         } else {
             Path sh = pastaBin.resolve("java");
             String scriptSh = "#!/usr/bin/env sh\n"
-                    + "exec \"" + javaExecutavelReal + "\" \"@" + argFile.toAbsolutePath() + "\" "
-                    + mainClass.getName() + " \"$@\"\n";
+                    + "exec '" + escaparAspasSimples(javaExecutavelReal) + "' '@"
+                    + escaparAspasSimples(argFile.toAbsolutePath().toString()) + "' '"
+                    + escaparAspasSimples(mainClass.getName()) + "' \"$@\"\n";
             Files.writeString(sh, scriptSh, StandardCharsets.UTF_8);
             sh.toFile().setExecutable(true);
         }
         return pastaBin;
+    }
+
+    private static String escaparAspasSimples(String valor) {
+        return valor.replace("'", "'\"'\"'");
     }
 
     private static Optional<String> localizarExecutavelPowerShell() {
