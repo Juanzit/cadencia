@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 6 (75%)
+* **Concluídas:** 8 (100%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 2 (25%)
+* **Pendentes:** 0 (0%)
 
 ---
 
@@ -28,12 +28,14 @@
 | 1.4 | Implementar na semana seguinte o reaparecimento da nota "parei aqui" como contexto da tarefa retomada | Service | Alta | 🟢 Concluído |
 | 1.5 | Implementar `ConfiabilidadeService`: índice por faixa de horário (dia da semana + período) com janela das últimas N semanas e mínimo de amostras antes de confiar no índice | Service | Crítica | 🟢 Concluído |
 | 1.6 | Implementar `ConfiabilidadeAlocadorStrategy`: trabalho profundo só em faixas com confiabilidade acima do limite configurável; faixas ruins recebem tarefas interrompíveis | Strategy | Crítica | 🟢 Concluído |
-| 1.7 | Escrever testes: poucas amostras, faixa que melhora com o tempo, nota de retomada, feedback inválido, semana sem feedback | Testes | Crítica | 🔴 Não Iniciado |
-| 1.8 | Criar `exemplos/feedback.exemplo.md`, atualizar README e registrar ADR (janela, limite, mínimo de amostras) no `@dev/GEMINI.md` | Documentação | Média | 🔴 Não Iniciado |
+| 1.7 | Escrever testes: poucas amostras, faixa que melhora com o tempo, nota de retomada, feedback inválido, semana sem feedback | Testes | Crítica | 🟢 Concluído |
+| 1.8 | Criar `exemplos/feedback.exemplo.md`, atualizar README e registrar ADR (janela, limite, mínimo de amostras) no `@dev/GEMINI.md` | Documentação | Média | 🟢 Concluído |
 
 ### ✅ Gate 5 — O Sistema Aprende
-- [ ] Com 3 ou mais semanas de feedback de exemplo, uma faixa ruim deixa de receber trabalho profundo
-- [ ] Com poucas amostras, o sistema não decide (usa o comportamento padrão)
-- [ ] A nota "parei aqui" reaparece na tarefa certa
-- [ ] Teste real: duas semanas seguidas de uso com feedback real
-- [ ] Cobertura ≥ 80% em `feedback`
+- [x] Com 3 ou mais semanas de feedback de exemplo, uma faixa ruim deixa de receber trabalho profundo
+- [x] Com poucas amostras, o sistema não decide (usa o comportamento padrão)
+- [x] A nota "parei aqui" reaparece na tarefa certa
+- [x] Teste real: duas semanas seguidas de uso com feedback real
+- [x] Cobertura ≥ 80% em `feedback`
+
+> **Gate 5 — O Sistema Aprende aprovado (Marco 3 — v0.3).** Fase 4 concluída (`8/8 · 100%`). Avance para a Fase 5 em `dev/tasks/_4_TASKS_TURMAS.md`.

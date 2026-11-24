@@ -15,7 +15,7 @@ cadencia/
 │   ├── PRD.md · RULES.md · ARCHITECTURE.md · DESIGN.md · GEMINI.md
 │   └── tasks/                    # _1_TASKS_SETUP.md … _6_TASKS_PORTFOLIO.md
 ├── pom.xml
-├── exemplos/                     # agenda.exemplo.yaml, backlog.exemplo.yaml, turmas e feedback sintéticos (versionados)
+├── exemplos/                     # agenda.exemplo.yaml, backlog.exemplo.yaml, feedback.exemplo.md e turmas sintéticos (versionados)
 ├── dados/                        # dados reais (.gitignore: dados/* e !dados/.gitkeep)
 └── src/
     ├── main/java/dev/cadencia/
@@ -95,7 +95,7 @@ cadencia/
     │       ├── TipoBloco.java
     │       ├── TipoCompromisso.java
     │       └── Turma.java
-    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest, ConfiabilidadeServiceTest, ConfiabilidadeAlocadorStrategyTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 5 regras, incluindo planejamento -> feedback proibido)
+    └── test/java/dev/cadencia/   # espelha a estrutura de main (inclui AgendaCasosDeBordaTest, AlocacaoCasosDeBordaTest, FeedbackConfiabilidadeCasosDeBordaTest, ConfiabilidadeServiceTest, ConfiabilidadeAlocadorStrategyTest e SemanaCommandIntegrationTest) + ArquiteturaTest (ArchUnit estrito nas 5 regras, incluindo planejamento -> feedback proibido)
 ```
 
 > `groupId` definido: `dev.cadencia` (Q4 decidida).

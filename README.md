@@ -2,7 +2,7 @@
 
 > Planejador semanal que roda 100% local: calcula seus blocos de tempo livre, distribui tarefas de estudo conforme a qualidade de cada bloco e usa um modelo local (Ollama) para gerar roteiros de aula e o feedback da semana.
 
-**Status:** Marco 1 (Fases 1–2B, Gate 3) e **Marco 2 — v0.2** (Fase 3: `8/8` tarefas concluídas e **Gate 4 — Alocação de Estudos aprovado**) concluídos e publicados; próxima etapa: Fase 4 — Feedback e Confiabilidade (`dev/tasks/_3_TASKS_FEEDBACK_CONFIABILIDADE.md`).
+**Status:** Marco 1 (Fases 1–2B, Gate 3), Marco 2 — v0.2 (Fase 3, Gate 4) e **Marco 3 — v0.3** (Fase 4: `8/8` tarefas concluídas e **Gate 5 — O Sistema Aprende aprovado**) concluídos e publicados; próxima etapa: Fase 5 — Turmas e Transições de Módulo (`dev/tasks/_4_TASKS_TURMAS.md`).
 
 ## Stack
 
@@ -71,7 +71,30 @@ java -Dcadencia.diretorio-dados=/caminho/temporario -jar target\cadencia-0.1.0-S
   - Cada tarefa é dividida de forma determinística em pedaços retomáveis (`25` min por padrão via `cadencia.pedaco-padrao-min`, ou o valor definido em `tamanho_pedaco_min` no YAML; o último pedaço absorve apenas o tempo restante).
   - Na tabela de cada dia e na seção `## Checklist de estudos`, cada pedaço alocado aparece no formato **`Título (k/N)`** (por exemplo, `Java Collections e Complexidade (1/6)`), indicando o `k`-ésimo pedaço de um total de `N`, sempre respeitando os `tipos_aceitos` da tarefa e a folga mínima configurável (`10` min via `cadencia.folga-minima-min`) junto a compromissos adjacentes.
   - Pedaços que não couberem por falta de tempo ou bloco compatível são listados em `## Avisos`.
-- **Códigos de saída:** `0` (sucesso ou ajuda com `cadencia` sem subcomando), `2` (agenda/backlog ausente quando obrigatório, YAML inválido, falha de validação ou `--data` malformada), `1` (erro inesperado).
+- **Códigos de saída:** `0` (sucesso ou ajuda com `cadencia` sem subcomando), `2` (agenda/backlog ausente quando obrigatório, YAML inválido, falha de validação, feedback malformado ou `--data` malformada), `1` (erro inesperado).
+
+## Feedback Semanal e Confiabilidade (`cadencia feedback`)
+
+Para fechar o ciclo semanal de melhoria contínua sem depender de IA:
+
+1. **Gerar o arquivo modelo da semana:**
+
+```powershell
+java -jar target\cadencia-0.1.0-SNAPSHOT.jar feedback --modelo --agenda exemplos/agenda.exemplo.yaml --backlog exemplos/backlog.exemplo.yaml --data 2026-11-23
+```
+
+   O comando cria `<cadencia.diretorio-dados>/feedback/AAAA-Wnn.md` (ex.: `dados/feedback/2026-W48.md`) preenchido com os estudos alocados (ou blocos livres, na ausência de backlog), todos inicialmente com `| NAO_ACONTECEU`. Por segurança, arquivos já existentes não são sobrescritos, salvo quando `--sobrescrever` for informado. Veja um arquivo completo em [exemplos/feedback.exemplo.md](exemplos/feedback.exemplo.md).
+
+2. **Registrar a execução real manualmente:**
+
+   Abra `dados/feedback/AAAA-Wnn.md` no AppFlowy ou editor de texto e marque cada item com um dos três estados válidos:
+   - `[x] ... | CONCLUIDO` (`peso = 1.0`): remove qualquer nota `"parei aqui"` pendente daquela tarefa.
+   - `[ ] ... | INTERROMPIDO | parei no exercício 7` (`peso = 0.5`): o texto após o terceiro `|` é guardado como nota `"parei aqui"`.
+   - `[ ] ... | NAO_ACONTECEU` (`peso = 0.0`): preserva eventual nota anterior ainda em aberto.
+
+3. **Como o feedback influencia a semana seguinte:**
+   - **Nota de retomada:** na próxima execução de `cadencia semana`, a última nota `"parei aqui"` vigente reaparece automaticamente no primeiro pedaço cronológico daquela tarefa em `## Checklist de estudos` (`— retomar: ...`).
+   - **Aprendizado estatístico por faixa (`ConfiabilidadeService` + `ConfiabilidadeAlocadorStrategy`):** agrupa os feedbacks por `(dia da semana, período)` (`MANHA < 12:00`, `TARDE 12:00–17:59`, `NOITE >= 18:00`) na janela móvel padrão das últimas `4` semanas (`cadencia.confiabilidade.janela-semanas`). Uma faixa só é considerada de baixa confiabilidade ao atingir `3` amostras (`cadencia.confiabilidade.minimo-amostras`) e ficar abaixo de `0.50` (`cadencia.confiabilidade.limite-confiabilidade`). Blocos `PROFUNDO` nessas faixas passam a aceitar apenas tarefas `INTERROMPIVEL` (registrando o alerta em `## Avisos`), enquanto faixas com poucas amostras preservam integralmente o comportamento padrão.
 
 ### Exemplo real da saída (anonimizado — `exemplos/agenda.exemplo.yaml` + `exemplos/backlog.exemplo.yaml`, semana `2026-W48`)
 
