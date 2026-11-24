@@ -5,6 +5,7 @@ import dev.cadencia.agenda.SemanaPlanejada;
 import dev.cadencia.dominio.Semana;
 import dev.cadencia.dominio.Tarefa;
 import dev.cadencia.exportacao.strategies.ExportadorStrategy;
+import dev.cadencia.feedback.FeedbackService;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.ResultadoAlocacao;
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -28,6 +30,7 @@ public class PlanoSemanalService {
     private final AgendaService agendaService;
     private final BacklogRepository backlogRepository;
     private final PlanejamentoService planejamentoService;
+    private final FeedbackService feedbackService;
     private final ExportadorStrategy exportadorStrategy;
     private final PlanoSemanalRepository planoSemanalRepository;
     private final Path diretorioDados;
@@ -40,6 +43,7 @@ public class PlanoSemanalService {
         this.agendaService = Objects.requireNonNull(agendaService, "agendaService não pode ser nulo");
         this.backlogRepository = null;
         this.planejamentoService = null;
+        this.feedbackService = null;
         this.exportadorStrategy = Objects.requireNonNull(
                 exportadorStrategy, "exportadorStrategy não pode ser nula");
         this.planoSemanalRepository = Objects.requireNonNull(
@@ -59,6 +63,29 @@ public class PlanoSemanalService {
                 backlogRepository, "backlogRepository não pode ser nulo");
         this.planejamentoService = Objects.requireNonNull(
                 planejamentoService, "planejamentoService não pode ser nulo");
+        this.feedbackService = null;
+        this.exportadorStrategy = Objects.requireNonNull(
+                exportadorStrategy, "exportadorStrategy não pode ser nula");
+        this.planoSemanalRepository = Objects.requireNonNull(
+                planoSemanalRepository, "planoSemanalRepository não pode ser nulo");
+        this.diretorioDados = validarENormalizarDiretorio(diretorioDados);
+    }
+
+    public PlanoSemanalService(
+            AgendaService agendaService,
+            BacklogRepository backlogRepository,
+            PlanejamentoService planejamentoService,
+            FeedbackService feedbackService,
+            ExportadorStrategy exportadorStrategy,
+            PlanoSemanalRepository planoSemanalRepository,
+            Path diretorioDados) {
+        this.agendaService = Objects.requireNonNull(agendaService, "agendaService não pode ser nulo");
+        this.backlogRepository = Objects.requireNonNull(
+                backlogRepository, "backlogRepository não pode ser nulo");
+        this.planejamentoService = Objects.requireNonNull(
+                planejamentoService, "planejamentoService não pode ser nulo");
+        this.feedbackService = Objects.requireNonNull(
+                feedbackService, "feedbackService não pode ser nulo");
         this.exportadorStrategy = Objects.requireNonNull(
                 exportadorStrategy, "exportadorStrategy não pode ser nula");
         this.planoSemanalRepository = Objects.requireNonNull(
@@ -95,9 +122,16 @@ public class PlanoSemanalService {
                 ? planejamentoService.alocar(semanaPlanejada, tarefasBacklog)
                 : null;
 
-        String conteudoMarkdown = resultadoAlocacao != null
-                ? exportadorStrategy.exportar(semanaPlanejada, resultadoAlocacao)
-                : exportadorStrategy.exportar(semanaPlanejada);
+        String conteudoMarkdown;
+        if (resultadoAlocacao != null) {
+            Map<String, String> notasRetomada = feedbackService != null
+                    ? feedbackService.resolverNotasRetomada(semanaPlanejada.semana())
+                    : Map.of();
+            conteudoMarkdown = exportadorStrategy.exportar(
+                    semanaPlanejada, resultadoAlocacao, notasRetomada);
+        } else {
+            conteudoMarkdown = exportadorStrategy.exportar(semanaPlanejada);
+        }
 
         Path destino = resolverArquivoSaida(semanaPlanejada.semana());
         Path arquivoSalvo = planoSemanalRepository.salvar(destino, conteudoMarkdown);

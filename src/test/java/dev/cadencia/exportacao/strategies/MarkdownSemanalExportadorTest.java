@@ -484,4 +484,66 @@ class MarkdownSemanalExportadorTest {
                         "| 08:25–09:00 | **Bloco profundo** | Bloco B |");
         assertThat(mdDoisBlocos.split("Bloco A", -1)).hasSize(2);
     }
+
+    @Test
+    void deveExibirNotaRetomadaApenasNoPrimeiroPedacoCronologicoNormalizandoSufixoDePedaco() {
+        LocalDate segunda = LocalDate.of(2026, 11, 23);
+        LocalDate terca = LocalDate.of(2026, 11, 24);
+        Bloco blocoSeg = new Bloco(segunda, LocalTime.of(7, 0), LocalTime.of(8, 0), TipoBloco.PROFUNDO, null);
+        Bloco blocoTer = new Bloco(terca, LocalTime.of(14, 0), LocalTime.of(15, 0), TipoBloco.PROFUNDO, null);
+        SemanaPlanejada semana = new SemanaPlanejada(
+                segunda, new Semana(2026, 48, List.of(), List.of(blocoSeg, blocoTer)), List.of());
+
+        Tarefa collections = new Tarefa(
+                "collections", "Java Collections", Duration.ofMinutes(75), List.of(TipoBloco.PROFUNDO), 1);
+        Tarefa flashcards = new Tarefa(
+                "flashcards", "Flashcards Java", Duration.ofMinutes(25), List.of(TipoBloco.PROFUNDO), 2);
+
+        List<dev.cadencia.dominio.Pedaco> pedacosCol = collections.dividirEmPedacos();
+        PedacoAlocado p3Terca = new PedacoAlocado(
+                blocoTer, terca, LocalTime.of(14, 0), LocalTime.of(14, 25), pedacosCol.get(2));
+        PedacoAlocado p1Segunda = new PedacoAlocado(
+                blocoSeg, segunda, LocalTime.of(7, 0), LocalTime.of(7, 25), pedacosCol.get(0));
+        PedacoAlocado p2Segunda = new PedacoAlocado(
+                blocoSeg, segunda, LocalTime.of(7, 25), LocalTime.of(7, 50), pedacosCol.get(1));
+        PedacoAlocado f1Terca = new PedacoAlocado(
+                blocoTer,
+                terca,
+                LocalTime.of(14, 25),
+                LocalTime.of(14, 50),
+                flashcards.dividirEmPedacos().get(0));
+
+        // Passa alocados propositalmente fora de ordem cronológica e chave com sufixo (2/6)
+        ResultadoAlocacao alocacaoDesordenada = new ResultadoAlocacao(
+                List.of(p3Terca, f1Terca, p2Segunda, p1Segunda), List.of());
+
+        String md = exportador.exportar(
+                semana,
+                alocacaoDesordenada,
+                Map.of(
+                        "Java Collections (2/6)", "  parei no card 12\ncontinuar  ",
+                        "", "ignorada",
+                        "SemUso", "   "));
+
+        assertThat(md).contains("""
+                ## Checklist de estudos
+                - [ ] seg 07:00–07:25 · Java Collections (1/3) — retomar: parei no card 12 continuar
+                - [ ] seg 07:25–07:50 · Java Collections (2/3)
+                - [ ] ter 14:00–14:25 · Java Collections (3/3)
+                - [ ] ter 14:25–14:50 · Flashcards Java (1/1)
+                """);
+        assertThat(md).contains("| 07:00–07:25 | **Bloco profundo** | Java Collections (1/3) |");
+        assertThat(md.split("— retomar:", -1)).hasSize(2);
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> exportador.exportar(semana, alocacaoDesordenada, null));
+        Map<String, String> mapaComValorNulo = new java.util.HashMap<>();
+        mapaComValorNulo.put("Java Collections", null);
+        assertThatNullPointerException()
+                .isThrownBy(() -> exportador.exportar(semana, alocacaoDesordenada, mapaComValorNulo));
+        Map<String, String> mapaComChaveNula = new java.util.HashMap<>();
+        mapaComChaveNula.put(null, "nota");
+        assertThatNullPointerException()
+                .isThrownBy(() -> exportador.exportar(semana, alocacaoDesordenada, mapaComChaveNula));
+    }
 }

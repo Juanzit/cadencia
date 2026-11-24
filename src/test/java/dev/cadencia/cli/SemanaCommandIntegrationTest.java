@@ -2,7 +2,11 @@ package dev.cadencia.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.cadencia.dominio.FeedbackSemanal;
+import dev.cadencia.dominio.ItemFeedback;
+import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.exportacao.PlanoSemanalService;
+import dev.cadencia.feedback.FeedbackRepository;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -10,9 +14,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -349,6 +356,99 @@ class SemanaCommandIntegrationTest {
         contextoComFalha.registerBean(PicocliCommandRunner.class, () -> runnerComFalha);
         int codigoViaSpringExit = SpringApplication.exit(contextoComFalha);
         assertThat(codigoViaSpringExit).isEqualTo(1);
+    }
+
+    @Test
+    void deveExibirNotaPareiAquiDeFeedbackAnteriorECessarAposConclusaoViaCli() throws IOException {
+        FeedbackRepository feedbackRepository = applicationContext.getBean(FeedbackRepository.class);
+        Path backlogRetomada = Files.createTempFile(diretorioDadosTemporario, "backlog-retomada-", ".yaml");
+        Files.writeString(backlogRetomada, """
+                tarefas:
+                  - id: "collections"
+                    titulo: "Java Collections"
+                    duracao_total_min: 75
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        Path w47 = diretorioDadosTemporario.resolve("feedback/2026-W47.md");
+        Path w48 = diretorioDadosTemporario.resolve("feedback/2026-W48.md");
+        Path w49 = diretorioDadosTemporario.resolve("feedback/2026-W49.md");
+        try {
+            feedbackRepository.salvar(w47, new FeedbackSemanal(
+                    2026,
+                    47,
+                    List.of(new ItemFeedback(
+                            DayOfWeek.MONDAY,
+                            LocalTime.of(19, 0),
+                            LocalTime.of(19, 25),
+                            "Java Collections (2/6)",
+                            StatusBloco.INTERROMPIDO,
+                            "parei no card 12")),
+                    List.of()));
+            feedbackRepository.salvar(w49, new FeedbackSemanal(
+                    2026,
+                    49,
+                    List.of(new ItemFeedback(
+                            DayOfWeek.MONDAY,
+                            LocalTime.of(7, 0),
+                            LocalTime.of(7, 25),
+                            "Java Collections (1/3)",
+                            StatusBloco.INTERROMPIDO,
+                            "nota futura ignorada")),
+                    List.of()));
+
+            int codW48 = runner.executar(
+                    new PrintWriter(new StringWriter()),
+                    new PrintWriter(new StringWriter()),
+                    "semana",
+                    "--agenda", "exemplos/agenda.exemplo.yaml",
+                    "--backlog", backlogRetomada.toString(),
+                    "--data", "2026-11-23");
+            assertThat(codW48).isZero();
+
+            String mdW48 = Files.readString(
+                    diretorioDadosTemporario.resolve("semana/2026-W48.md"), StandardCharsets.UTF_8);
+            assertThat(mdW48)
+                    .contains("- [ ] seg 07:00–07:25 · Java Collections (1/3) — retomar: parei no card 12\n")
+                    .contains("- [ ] seg 07:25–07:50 · Java Collections (2/3)\n")
+                    .contains("- [ ] seg 07:50–08:15 · Java Collections (3/3)\n")
+                    .doesNotContain("nota futura ignorada");
+            assertThat(mdW48.split("— retomar:", -1)).hasSize(2);
+
+            // Conclui na W48 e verifica que na W49 (logo após a conclusão) não reaparece
+            feedbackRepository.salvar(w48, new FeedbackSemanal(
+                    2026,
+                    48,
+                    List.of(new ItemFeedback(
+                            DayOfWeek.MONDAY,
+                            LocalTime.of(7, 0),
+                            LocalTime.of(7, 25),
+                            "Java Collections (1/3)",
+                            StatusBloco.CONCLUIDO,
+                            null)),
+                    List.of()));
+
+            int codW49 = runner.executar(
+                    new PrintWriter(new StringWriter()),
+                    new PrintWriter(new StringWriter()),
+                    "semana",
+                    "--agenda", "exemplos/agenda.exemplo.yaml",
+                    "--backlog", backlogRetomada.toString(),
+                    "--data", "2026-11-30");
+            assertThat(codW49).isZero();
+
+            String mdW49 = Files.readString(
+                    diretorioDadosTemporario.resolve("semana/2026-W49.md"), StandardCharsets.UTF_8);
+            assertThat(mdW49)
+                    .contains("- [ ] seg 07:00–07:25 · Java Collections (1/3)\n")
+                    .doesNotContain("— retomar:");
+        } finally {
+            Files.deleteIfExists(w47);
+            Files.deleteIfExists(w48);
+            Files.deleteIfExists(w49);
+            Files.deleteIfExists(backlogRetomada);
+        }
     }
 
     @Test

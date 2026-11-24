@@ -10,7 +10,13 @@ import dev.cadencia.agenda.AgendaRepository;
 import dev.cadencia.agenda.AgendaService;
 import dev.cadencia.agenda.DadosInvalidosException;
 import dev.cadencia.agenda.YamlAgendaRepository;
+import dev.cadencia.dominio.FeedbackSemanal;
+import dev.cadencia.dominio.ItemFeedback;
+import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.exportacao.strategies.MarkdownSemanalExportador;
+import dev.cadencia.feedback.FeedbackRepository;
+import dev.cadencia.feedback.FeedbackService;
+import dev.cadencia.feedback.MarkdownFeedbackRepository;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
 import dev.cadencia.planejamento.YamlBacklogRepository;
@@ -22,8 +28,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -207,6 +216,71 @@ class PlanoSemanalServiceTest {
             Path backlogInexistente = tempDir.resolve("nao-existe.yaml");
             assertThatThrownBy(() -> service.gerarEExportar(null, backlogInexistente, null))
                     .isInstanceOf(DadosInvalidosException.class);
+        }
+    }
+
+    @Test
+    void devePropagarNotaPareiAquiDeSemanasAnterioresParaOSomentePrimeiroPedacoDoChecklist()
+            throws IOException {
+        Path dadosTemp = tempDir.resolve("dados-retomada");
+        Files.createDirectories(dadosTemp);
+        Files.copy(Path.of("exemplos/agenda.exemplo.yaml"), dadosTemp.resolve("agenda.yaml"));
+        Files.writeString(dadosTemp.resolve("backlog.yaml"), """
+                tarefas:
+                  - id: "collections"
+                    titulo: "Java Collections"
+                    duracao_total_min: 75
+                    tipos_aceitos: [PROFUNDO]
+                    prioridade: 1
+                """, StandardCharsets.UTF_8);
+
+        FeedbackRepository feedbackRepo = new MarkdownFeedbackRepository();
+        feedbackRepo.salvar(
+                dadosTemp.resolve("feedback/2026-W47.md"),
+                new FeedbackSemanal(
+                        2026,
+                        47,
+                        List.of(new ItemFeedback(
+                                DayOfWeek.WEDNESDAY,
+                                LocalTime.of(19, 0),
+                                LocalTime.of(19, 25),
+                                "Java Collections (2/6)",
+                                StatusBloco.INTERROMPIDO,
+                                "parei no card 12")),
+                        List.of()));
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+            AgendaService agendaService = new AgendaService(
+                    new YamlAgendaRepository(yamlMapper, factory.getValidator()), RELOGIO_W48);
+            BacklogRepository backlogRepo = new YamlBacklogRepository(yamlMapper, factory.getValidator());
+            PlanejamentoService planejamento = new PlanejamentoService(new PrioridadeAlocadorStrategy());
+            FeedbackService feedbackService = new FeedbackService(
+                    agendaService, backlogRepo, planejamento, feedbackRepo, dadosTemp);
+            MarkdownSemanalExportador exportador = new MarkdownSemanalExportador();
+            PlanoSemanalRepository planoRepo = new MarkdownPlanoSemanalRepository();
+
+            assertThatNullPointerException().isThrownBy(() -> new PlanoSemanalService(
+                    agendaService, backlogRepo, planejamento, null, exportador, planoRepo, dadosTemp));
+
+            PlanoSemanalService service = new PlanoSemanalService(
+                    agendaService,
+                    backlogRepo,
+                    planejamento,
+                    feedbackService,
+                    exportador,
+                    planoRepo,
+                    dadosTemp);
+
+            PlanoSemanalGerado gerado = service.gerarEExportar(null, null, null);
+            String markdown = Files.readString(gerado.arquivoSaida(), StandardCharsets.UTF_8);
+            assertThat(markdown).contains("""
+                    ## Checklist de estudos
+                    - [ ] seg 07:00–07:25 · Java Collections (1/3) — retomar: parei no card 12
+                    - [ ] seg 07:25–07:50 · Java Collections (2/3)
+                    - [ ] seg 07:50–08:15 · Java Collections (3/3)
+                    """);
+            assertThat(markdown.split("— retomar:", -1)).hasSize(2);
         }
     }
 }

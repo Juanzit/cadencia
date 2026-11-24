@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Tarefa de estudo do backlog com duração total, tipos de bloco compatíveis, tamanho de pedaço
@@ -18,6 +20,8 @@ public record Tarefa(
         int prioridade) {
 
     public static final Duration TAMANHO_PEDACO_PADRAO = Duration.ofMinutes(25);
+    private static final Pattern SUFIXO_INDICE_PEDACO =
+            Pattern.compile("^(.*?)\\s*\\(\\d+/\\d+\\)\\s*$");
 
     public Tarefa {
         Objects.requireNonNull(id, "id não pode ser nulo");
@@ -75,5 +79,16 @@ public record Tarefa(
             restanteNanos -= fatiaNanos;
         }
         return List.copyOf(pedacos);
+    }
+
+    /**
+     * Remove o sufixo sequencial {@code (k/N)} e espaços excedentes para manter a mesma chave entre
+     * o título da tarefa no backlog e os itens registrados no feedback semanal.
+     */
+    public static String normalizarTitulo(String titulo) {
+        Objects.requireNonNull(titulo, "titulo não pode ser nulo");
+        String limpo = titulo.trim();
+        Matcher matcher = SUFIXO_INDICE_PEDACO.matcher(limpo);
+        return matcher.matches() ? matcher.group(1).trim() : limpo;
     }
 }

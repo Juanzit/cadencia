@@ -18,10 +18,14 @@ import dev.cadencia.planejamento.ResultadoAlocacao;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -47,6 +51,15 @@ public class FeedbackService {
             .thenComparing(Bloco::fim)
             .thenComparing(Bloco::tipo)
             .thenComparing(Bloco::descricao, Comparator.nullsFirst(String::compareTo));
+
+    private static final Comparator<FeedbackSemanal> ORDEM_HISTORICO = Comparator
+            .comparingInt(FeedbackSemanal::ano)
+            .thenComparingInt(FeedbackSemanal::numeroIso);
+
+    private static final Comparator<ItemFeedback> ORDEM_ITENS_FEEDBACK = Comparator
+            .comparingInt((ItemFeedback item) -> item.diaSemana().getValue())
+            .thenComparing(ItemFeedback::inicio)
+            .thenComparing(ItemFeedback::fim, Comparator.nullsFirst(LocalTime::compareTo));
 
     private final AgendaService agendaService;
     private final BacklogRepository backlogRepository;
@@ -129,6 +142,57 @@ public class FeedbackService {
                 List.of());
         Path arquivoSalvo = feedbackRepository.salvar(destino, modelo);
         return new ModeloFeedbackGerado(arquivoSalvo, modelo, semanaPlanejada, resultadoAlocacao);
+    }
+
+    /**
+     * Resolve, a partir dos feedbacks gravados em {@code <diretorioDados>/feedback}, o mapa
+     * imutável da última nota {@code "parei aqui"} vigente por título normalizado para a semana
+     * alvo (considerando exclusivamente semanas estritamente anteriores).
+     */
+    public Map<String, String> resolverNotasRetomada(Semana semanaAlvo) {
+        Objects.requireNonNull(semanaAlvo, "semanaAlvo não pode ser nula");
+        List<FeedbackSemanal> historico = feedbackRepository.listarHistorico(
+                diretorioDados.resolve(SUBDIRETORIO_FEEDBACK));
+        return resolverNotasRetomada(semanaAlvo, historico);
+    }
+
+    /**
+     * Consolida de forma determinística a última nota {@code "parei aqui"} vigente por tarefa sem
+     * mutar {@code historico}, considerando somente semanas estritamente anteriores à
+     * {@code semanaAlvo}, ordenando semanas por {@code (ano, numeroIso)} e itens por
+     * {@code (diaSemana, inicio, fim)}, dando precedência absoluta ao status {@code CONCLUIDO} e
+     * preservando notas anteriores quando não houver nova nota nem conclusão.
+     */
+    public Map<String, String> resolverNotasRetomada(
+            Semana semanaAlvo, List<FeedbackSemanal> historico) {
+        Objects.requireNonNull(semanaAlvo, "semanaAlvo não pode ser nula");
+        Objects.requireNonNull(historico, "historico não pode ser nulo");
+
+        List<FeedbackSemanal> copiaHistorico = List.copyOf(historico);
+        List<FeedbackSemanal> semanasAnteriores = copiaHistorico.stream()
+                .filter(feedback -> ehSemanaAnterior(feedback, semanaAlvo))
+                .sorted(ORDEM_HISTORICO)
+                .toList();
+
+        Map<String, String> notasVigentes = new LinkedHashMap<>();
+        for (FeedbackSemanal semana : semanasAnteriores) {
+            List<ItemFeedback> itensOrdenados = new ArrayList<>(semana.itens());
+            itensOrdenados.sort(ORDEM_ITENS_FEEDBACK);
+            for (ItemFeedback item : itensOrdenados) {
+                String chave = Tarefa.normalizarTitulo(item.titulo());
+                if (item.status() == StatusBloco.CONCLUIDO) {
+                    notasVigentes.remove(chave);
+                } else if (item.possuiNotaRetomada()) {
+                    notasVigentes.put(chave, item.notaRetomada());
+                }
+            }
+        }
+        return Collections.unmodifiableMap(notasVigentes);
+    }
+
+    private static boolean ehSemanaAnterior(FeedbackSemanal feedback, Semana semanaAlvo) {
+        return feedback.ano() < semanaAlvo.ano()
+                || (feedback.ano() == semanaAlvo.ano() && feedback.numeroIso() < semanaAlvo.numeroIso());
     }
 
     private List<Tarefa> carregarBacklogOpcionalOuExplicito(Path caminhoBacklog) {

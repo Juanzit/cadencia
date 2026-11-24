@@ -86,6 +86,7 @@ public class CadenciaConfig {
             AgendaService agendaService,
             BacklogRepository backlogRepository,
             PlanejamentoService planejamentoService,
+            FeedbackService feedbackService,
             ExportadorStrategy exportadorStrategy,
             PlanoSemanalRepository planoSemanalRepository,
             @Value("${cadencia.diretorio-dados:./dados}") Path diretorioDados) {
@@ -93,6 +94,7 @@ public class CadenciaConfig {
                 agendaService,
                 backlogRepository,
                 planejamentoService,
+                feedbackService,
                 exportadorStrategy,
                 planoSemanalRepository,
                 diretorioDados);

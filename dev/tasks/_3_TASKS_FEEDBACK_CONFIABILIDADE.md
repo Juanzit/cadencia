@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 3 (38%)
+* **Concluídas:** 4 (50%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 5 (63%)
+* **Pendentes:** 4 (50%)
 
 ---
 
@@ -25,7 +25,7 @@
 | 1.1 | Implementar `FeedbackRepository` e `MarkdownFeedbackRepository` (parser do formato do `@dev/DESIGN.md`) com mensagens de erro por linha | Repository / DTO | Crítica | 🟢 Concluído |
 | 1.2 | Implementar `StatusBloco` (`CONCLUIDO`, `INTERROMPIDO`, `NAO_ACONTECEU`) e o registro da nota "parei aqui" | Domain | Crítica | 🟢 Concluído |
 | 1.3 | Gerar o modelo de feedback da semana (`cadencia feedback --modelo`) já preenchido com os blocos do plano, para o usuário só marcar | CLI / Exportação | Alta | 🟢 Concluído |
-| 1.4 | Implementar na semana seguinte o reaparecimento da nota "parei aqui" como contexto da tarefa retomada | Service | Alta | 🔴 Não Iniciado |
+| 1.4 | Implementar na semana seguinte o reaparecimento da nota "parei aqui" como contexto da tarefa retomada | Service | Alta | 🟢 Concluído |
 | 1.5 | Implementar `ConfiabilidadeService`: índice por faixa de horário (dia da semana + período) com janela das últimas N semanas e mínimo de amostras antes de confiar no índice | Service | Crítica | 🔴 Não Iniciado |
 | 1.6 | Implementar `ConfiabilidadeAlocadorStrategy`: trabalho profundo só em faixas com confiabilidade acima do limite configurável; faixas ruins recebem tarefas interrompíveis | Strategy | Crítica | 🔴 Não Iniciado |
 | 1.7 | Escrever testes: poucas amostras, faixa que melhora com o tempo, nota de retomada, feedback inválido, semana sem feedback | Testes | Crítica | 🔴 Não Iniciado |

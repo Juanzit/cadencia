@@ -18,11 +18,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Exporta uma {@link SemanaPlanejada} (opcionalmente acompanhada de um {@link ResultadoAlocacao})
@@ -50,7 +52,8 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     private static final Comparator<PedacoAlocado> ORDEM_ALOCADOS = Comparator
             .comparing(PedacoAlocado::data)
             .thenComparing(PedacoAlocado::inicio)
-            .thenComparing(PedacoAlocado::fim);
+            .thenComparing(PedacoAlocado::fim)
+            .thenComparingInt(alocado -> alocado.pedaco().numero());
 
     private static final Comparator<LinhaDia> ORDEM_LINHAS_DIA = Comparator
             .comparingLong(LinhaDia::inicioNanos)
@@ -62,18 +65,30 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     @Override
     public String exportar(SemanaPlanejada semanaPlanejada) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
-        return exportarInterno(semanaPlanejada, null);
+        return exportarInterno(semanaPlanejada, null, Map.of());
     }
 
     @Override
     public String exportar(SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao) {
+        return exportar(semanaPlanejada, resultadoAlocacao, Map.of());
+    }
+
+    @Override
+    public String exportar(
+            SemanaPlanejada semanaPlanejada,
+            ResultadoAlocacao resultadoAlocacao,
+            Map<String, String> notasRetomadaPorTarefa) {
         Objects.requireNonNull(semanaPlanejada, "semanaPlanejada não pode ser nula");
         Objects.requireNonNull(resultadoAlocacao, "resultadoAlocacao não pode ser nulo");
-        return exportarInterno(semanaPlanejada, resultadoAlocacao);
+        Objects.requireNonNull(notasRetomadaPorTarefa, "notasRetomadaPorTarefa não pode ser nulo");
+        Map<String, String> notasNormalizadas = normalizarNotasRetomada(notasRetomadaPorTarefa);
+        return exportarInterno(semanaPlanejada, resultadoAlocacao, notasNormalizadas);
     }
 
     private static String exportarInterno(
-            SemanaPlanejada semanaPlanejada, ResultadoAlocacao resultadoAlocacao) {
+            SemanaPlanejada semanaPlanejada,
+            ResultadoAlocacao resultadoAlocacao,
+            Map<String, String> notasRetomadaPorTarefa) {
         LocalDate inicioSemana = semanaPlanejada.inicioSemana();
         LocalDate fimSemana = inicioSemana.plusDays(DIAS_DA_SEMANA - 1L);
         Semana semana = semanaPlanejada.semana();
@@ -97,9 +112,29 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
                 blocosOrdenados,
                 alocadosOrdenados,
                 duracaoMinimaResidual);
-        escreverChecklist(md, blocosOrdenados, alocadosOrdenados);
+        escreverChecklist(md, blocosOrdenados, alocadosOrdenados, notasRetomadaPorTarefa);
         escreverAvisos(md, semanaPlanejada.avisos(), resultadoAlocacao);
         return md.toString();
+    }
+
+    private static Map<String, String> normalizarNotasRetomada(
+            Map<String, String> notasRetomadaPorTarefa) {
+        if (notasRetomadaPorTarefa.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> normalizadas = new HashMap<>();
+        for (Map.Entry<String, String> entry : notasRetomadaPorTarefa.entrySet()) {
+            String chave = Objects.requireNonNull(
+                    entry.getKey(), "chave de nota de retomada não pode ser nula");
+            String nota = Objects.requireNonNull(
+                    entry.getValue(), "valor de nota de retomada não pode ser nulo");
+            String chaveNormalizada = Tarefa.normalizarTitulo(chave);
+            String notaLimpa = sanitizarLinha(nota);
+            if (!chaveNormalizada.isEmpty() && !notaLimpa.isEmpty()) {
+                normalizadas.put(chaveNormalizada, notaLimpa);
+            }
+        }
+        return Map.copyOf(normalizadas);
     }
 
     private static Duration duracaoMinimaResidual(SemanaPlanejada semanaPlanejada) {
@@ -351,17 +386,25 @@ public class MarkdownSemanalExportador implements ExportadorStrategy {
     private static void escreverChecklist(
             StringBuilder md,
             List<Bloco> blocosOrdenados,
-            List<PedacoAlocado> alocadosOrdenados) {
+            List<PedacoAlocado> alocadosOrdenados,
+            Map<String, String> notasRetomadaPorTarefa) {
         md.append(LF).append("## Checklist de estudos").append(LF);
         if (!alocadosOrdenados.isEmpty()) {
+            Set<String> tarefasComNotaExibida = new HashSet<>();
             for (PedacoAlocado alocado : alocadosOrdenados) {
+                String chaveTarefa = Tarefa.normalizarTitulo(alocado.pedaco().tarefa().titulo());
+                String notaRetomada = notasRetomadaPorTarefa.get(chaveTarefa);
+
                 md.append("- [ ] ")
                         .append(abreviacaoDia(alocado.data().getDayOfWeek()))
                         .append(' ')
                         .append(formatarIntervalo(alocado.inicio(), alocado.fim()))
                         .append(" · ")
-                        .append(sanitizarLinha(formatarTituloPedaco(alocado.pedaco())))
-                        .append(LF);
+                        .append(sanitizarLinha(formatarTituloPedaco(alocado.pedaco())));
+                if (notaRetomada != null && tarefasComNotaExibida.add(chaveTarefa)) {
+                    md.append(" — retomar: ").append(notaRetomada);
+                }
+                md.append(LF);
             }
             return;
         }

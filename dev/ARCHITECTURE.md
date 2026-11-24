@@ -53,7 +53,7 @@ cadencia/
     │   │       └── ConfiabilidadeAlocadorStrategy.java
     │   ├── feedback/             # módulo de feedback e confiabilidade
     │   │   ├── FeedbackRepository.java          # porta de existência, leitura, histórico cronológico e gravação de feedback (1.1, 1.3)
-    │   │   ├── FeedbackService.java             # gera modelo `feedback/AAAA-Wnn.md` reutilizando agenda/backlog e protegendo contra sobrescrita (1.3)
+    │   │   ├── FeedbackService.java             # gera modelo `feedback/AAAA-Wnn.md` e resolve última nota `"parei aqui"` vigente por tarefa (1.3, 1.4)
     │   │   ├── MarkdownFeedbackRepository.java  # parser tolerante (HH:mm e HH:mm–HH:mm) e escrita UTF-8 LF idempotente (1.1, 1.3)
     │   │   ├── ModeloFeedbackGerado.java        # resultado imutável da geração do arquivo modelo de feedback (1.3)
     │   │   └── ConfiabilidadeService.java
@@ -70,10 +70,10 @@ cadencia/
     │   │   ├── MarkdownPlanoSemanalRepository.java # adapter de gravação UTF-8 + LF criando diretórios pais
     │   │   ├── PlanoSemanalGerado.java             # resultado imutável (arquivoSaida + SemanaPlanejada + ResultadoAlocacao opcional)
     │   │   ├── PlanoSemanalRepository.java         # porta de persistência do plano semanal
-    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, BacklogRepository, PlanejamentoService, ExportadorStrategy e PlanoSemanalRepository (3.2, 1.6)
+    │   │   ├── PlanoSemanalService.java            # orquestra AgendaService, BacklogRepository, PlanejamentoService, FeedbackService, ExportadorStrategy e PlanoSemanalRepository (3.2, 1.6, 1.4)
     │   │   └── strategies/
-    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação (com e sem ResultadoAlocacao)
-    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal com pedaços alocados (3.1, 1.6)
+    │   │       ├── ExportadorStrategy.java          # interface Strategy de exportação (com/sem ResultadoAlocacao e notas de retomada) (3.1, 1.6, 1.4)
+    │   │       └── MarkdownSemanalExportador.java   # geração determinística e idempotente do Markdown semanal com pedaços alocados e retomada `"parei aqui"` (3.1, 1.6, 1.4)
     │   └── dominio/              # DOMAIN: records e regras puras (sem Spring)
     │       ├── AgendaConfiguracao.java
     │       ├── Bloco.java

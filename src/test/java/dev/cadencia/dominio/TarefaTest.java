@@ -190,6 +190,16 @@ class TarefaTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void deveNormalizarTituloRemovendoSufixoDePedacoSemAlterarParentesesDoTitulo() {
+        assertThat(Tarefa.normalizarTitulo("Java Collections (2/6)")).isEqualTo("Java Collections");
+        assertThat(Tarefa.normalizarTitulo("  Java Collections (10/12)  ")).isEqualTo("Java Collections");
+        assertThat(Tarefa.normalizarTitulo("Java Collections")).isEqualTo("Java Collections");
+        assertThat(Tarefa.normalizarTitulo("Java (v21)")).isEqualTo("Java (v21)");
+        assertThat(Tarefa.normalizarTitulo("Arquitetura (MVC) (1/4)")).isEqualTo("Arquitetura (MVC)");
+        assertThatNullPointerException().isThrownBy(() -> Tarefa.normalizarTitulo(null));
+    }
+
     private static Duration somarDuracoes(List<Pedaco> pedacos) {
         return pedacos.stream()
                 .map(Pedaco::duracao)

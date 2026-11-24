@@ -12,6 +12,8 @@ import dev.cadencia.agenda.AgendaService;
 import dev.cadencia.agenda.DadosInvalidosException;
 import dev.cadencia.agenda.YamlAgendaRepository;
 import dev.cadencia.dominio.FeedbackSemanal;
+import dev.cadencia.dominio.ItemFeedback;
+import dev.cadencia.dominio.Semana;
 import dev.cadencia.dominio.StatusBloco;
 import dev.cadencia.planejamento.BacklogRepository;
 import dev.cadencia.planejamento.PlanejamentoService;
@@ -28,6 +30,9 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -181,6 +186,154 @@ class FeedbackServiceTest {
                             null,
                             false))
                     .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    @Test
+    void deveResolverNotasDeRetomadaDeterministicamenteSemMutarHistoricoEIgnorandoSemanasFuturas()
+            throws IOException {
+        Path dadosTemp = tempDir.resolve("dados-retomada");
+        Files.createDirectories(dadosTemp);
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            AgendaService agendaService = new AgendaService(
+                    new YamlAgendaRepository(new ObjectMapper(new YAMLFactory()), factory.getValidator()),
+                    RELOGIO_W48);
+            FeedbackRepository feedbackRepo = new MarkdownFeedbackRepository();
+            FeedbackService service = new FeedbackService(agendaService, feedbackRepo, dadosTemp);
+
+            Semana semanaW48 = new Semana(2026, 48, List.of(), List.of());
+            Semana semanaW49 = new Semana(2026, 49, List.of(), List.of());
+            Semana semanaW01Ano2027 = new Semana(2027, 1, List.of(), List.of());
+
+            // 1. Mesmo dia, horários diferentes, fim == null, empate e ordem reversa na lista de entrada
+            FeedbackSemanal w47ForaDeOrdem = new FeedbackSemanal(
+                    2026,
+                    47,
+                    List.of(
+                            new ItemFeedback(
+                                    DayOfWeek.MONDAY,
+                                    LocalTime.of(19, 0),
+                                    LocalTime.of(19, 25),
+                                    "Java Collections (2/6)",
+                                    StatusBloco.INTERROMPIDO,
+                                    "parei no card 12"),
+                            new ItemFeedback(
+                                    DayOfWeek.MONDAY,
+                                    LocalTime.of(7, 0),
+                                    null,
+                                    "Java Collections",
+                                    StatusBloco.INTERROMPIDO,
+                                    "parei no card 3"),
+                            new ItemFeedback(
+                                    DayOfWeek.TUESDAY,
+                                    LocalTime.of(8, 0),
+                                    null,
+                                    "Empate",
+                                    StatusBloco.INTERROMPIDO,
+                                    "primeira nota empatada"),
+                            new ItemFeedback(
+                                    DayOfWeek.TUESDAY,
+                                    LocalTime.of(8, 0),
+                                    null,
+                                    "Empate",
+                                    StatusBloco.INTERROMPIDO,
+                                    "segunda nota empatada"),
+                            new ItemFeedback(
+                                    DayOfWeek.WEDNESDAY,
+                                    LocalTime.of(10, 0),
+                                    LocalTime.of(10, 25),
+                                    "Spring Boot (1/5)",
+                                    StatusBloco.INTERROMPIDO,
+                                    "parei no controller")),
+                    List.of());
+
+            // 2. Semana posterior concluindo Spring Boot (mesmo com nota residual preenchida!)
+            //    e mantendo Java Collections sem nova nota via NAO_ACONTECEU / INTERROMPIDO sem nota
+            FeedbackSemanal w48 = new FeedbackSemanal(
+                    2026,
+                    48,
+                    List.of(
+                            new ItemFeedback(
+                                    DayOfWeek.MONDAY,
+                                    LocalTime.of(7, 0),
+                                    LocalTime.of(7, 25),
+                                    "Spring Boot (1/5)",
+                                    StatusBloco.CONCLUIDO,
+                                    "nota residual que deve ser removida pela conclusão"),
+                            new ItemFeedback(
+                                    DayOfWeek.TUESDAY,
+                                    LocalTime.of(7, 0),
+                                    LocalTime.of(7, 25),
+                                    "Java Collections",
+                                    StatusBloco.NAO_ACONTECEU,
+                                    null),
+                            new ItemFeedback(
+                                    DayOfWeek.WEDNESDAY,
+                                    LocalTime.of(7, 0),
+                                    LocalTime.of(7, 25),
+                                    "Empate",
+                                    StatusBloco.INTERROMPIDO,
+                                    null),
+                            new ItemFeedback(
+                                    DayOfWeek.THURSDAY,
+                                    LocalTime.of(9, 0),
+                                    LocalTime.of(9, 25),
+                                    "JPA (1/4)",
+                                    StatusBloco.INTERROMPIDO,
+                                    "parei no mapeamento N:N")),
+                    List.of());
+
+            FeedbackSemanal futuroW49 = new FeedbackSemanal(
+                    2026,
+                    49,
+                    List.of(new ItemFeedback(
+                            DayOfWeek.FRIDAY,
+                            LocalTime.of(8, 0),
+                            LocalTime.of(8, 25),
+                            "SQL (1/3)",
+                            StatusBloco.INTERROMPIDO,
+                            "nota futura nao pode vazar")),
+                    List.of());
+
+            List<FeedbackSemanal> historicoOriginal = new ArrayList<>(List.of(futuroW49, w48, w47ForaDeOrdem));
+            List<FeedbackSemanal> snapshotOriginal = List.copyOf(historicoOriginal);
+
+            // Ao regenerar 2026-W48: somente 2026-W47 influencia (W48 e W49 futuras são ignoradas)
+            Map<String, String> notasParaW48 = service.resolverNotasRetomada(semanaW48, historicoOriginal);
+            assertThat(notasParaW48)
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "Java Collections", "parei no card 12",
+                            "Empate", "segunda nota empatada",
+                            "Spring Boot", "parei no controller"));
+            assertThat(historicoOriginal).isEqualTo(snapshotOriginal);
+            assertThatThrownBy(() -> notasParaW48.put("Outra", "Valor"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> notasParaW48.remove("Java Collections"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+
+            // Ao gerar 2026-W49: Spring Boot foi concluído em W48 (nota removida); Java Collections e Empate preservados;
+            // W49 futuro ainda ignorado
+            Map<String, String> notasParaW49 = service.resolverNotasRetomada(semanaW49, historicoOriginal);
+            assertThat(notasParaW49)
+                    .containsExactlyInAnyOrderEntriesOf(Map.of(
+                            "Java Collections", "parei no card 12",
+                            "Empate", "segunda nota empatada",
+                            "JPA", "parei no mapeamento N:N"))
+                    .doesNotContainKey("Spring Boot")
+                    .doesNotContainKey("SQL");
+
+            // Virada de ano: 2027-W01 enxerga também 2026-W49
+            Map<String, String> notasPara2027W01 =
+                    service.resolverNotasRetomada(semanaW01Ano2027, historicoOriginal);
+            assertThat(notasPara2027W01).containsEntry("SQL", "nota futura nao pode vazar");
+
+            // Integração via repositório em disco
+            feedbackRepo.salvar(dadosTemp.resolve("feedback/2026-W47.md"), w47ForaDeOrdem);
+            feedbackRepo.salvar(dadosTemp.resolve("feedback/2026-W48.md"), w48);
+            feedbackRepo.salvar(dadosTemp.resolve("feedback/2026-W49.md"), futuroW49);
+            assertThat(service.resolverNotasRetomada(semanaW48)).isEqualTo(notasParaW48);
+            assertThat(service.resolverNotasRetomada(semanaW49)).isEqualTo(notasParaW49);
         }
     }
 }
