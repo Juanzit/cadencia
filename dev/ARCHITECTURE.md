@@ -50,8 +50,8 @@ cadencia/
     │   │       ├── PrioridadeAlocadorStrategy.java  # menor prioridade primeiro preservando roadmap (1.3, ADR-013)
     │   │       └── ConfiabilidadeAlocadorStrategy.java
     │   ├── feedback/             # módulo de feedback e confiabilidade
-    │   │   ├── FeedbackRepository.java
-    │   │   ├── MarkdownFeedbackRepository.java
+    │   │   ├── FeedbackRepository.java          # porta de leitura, histórico cronológico e gravação de feedback semanal (1.1)
+    │   │   ├── MarkdownFeedbackRepository.java  # parser tolerante (HH:mm e HH:mm–HH:mm) e escrita UTF-8 LF idempotente (1.1)
     │   │   └── ConfiabilidadeService.java
     │   ├── turmas/               # módulo de turmas e previsão
     │   │   ├── TurmaRepository.java

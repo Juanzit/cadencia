@@ -12,9 +12,9 @@
 ## 📊 Métricas e Progresso Geral
 
 * **Total de Tarefas:** 8
-* **Concluídas:** 1 (13%)
+* **Concluídas:** 2 (25%)
 * **Em Andamento:** 0 (0%)
-* **Pendentes:** 7 (88%)
+* **Pendentes:** 6 (75%)
 
 ---
 
@@ -22,7 +22,7 @@
 
 | # | Tarefa | Camada / Área | Prioridade | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| 1.1 | Implementar `FeedbackRepository` e `MarkdownFeedbackRepository` (parser do formato do `@dev/DESIGN.md`) com mensagens de erro por linha | Repository / DTO | Crítica | 🔴 Não Iniciado |
+| 1.1 | Implementar `FeedbackRepository` e `MarkdownFeedbackRepository` (parser do formato do `@dev/DESIGN.md`) com mensagens de erro por linha | Repository / DTO | Crítica | 🟢 Concluído |
 | 1.2 | Implementar `StatusBloco` (`CONCLUIDO`, `INTERROMPIDO`, `NAO_ACONTECEU`) e o registro da nota "parei aqui" | Domain | Crítica | 🟢 Concluído |
 | 1.3 | Gerar o modelo de feedback da semana (`cadencia feedback --modelo`) já preenchido com os blocos do plano, para o usuário só marcar | CLI / Exportação | Alta | 🔴 Não Iniciado |
 | 1.4 | Implementar na semana seguinte o reaparecimento da nota "parei aqui" como contexto da tarefa retomada | Service | Alta | 🔴 Não Iniciado |
